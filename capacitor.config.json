@@ -1,0 +1,16 @@
+{
+  "appId": "com.entregapro.app",
+  "appName": "Entrega Pro",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#0A0A0F",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    }
+  }
+}

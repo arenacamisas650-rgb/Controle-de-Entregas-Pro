@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#0A66C2"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Entrega Pro"/>
+  <title>Entrega Pro</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.2/dist/umd/supabase.min.js"></script>
+  <!-- Leaflet para mapa de rota -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@400;500;600;700;800;900&display=swap');
+
+    :root {
+      --brand: #0A66C2;
+      --brand-dark: #07549F;
+      --brand-light: #1E88E5;
+      --green: #16A34A;
+      --green-dark: #15803D;
+      --red: #DC2626;
+      --yellow: #F59E0B;
+      --blue: #1E88E5;
+      --bg: #F4F7FB;
+      --surface: #FFFFFF;
+      --surface2: #FFFFFF;
+      --surface3: #EEF4FB;
+      --border: #DCE6F2;
+      --text: #1F2937;
+      --text-muted: #64748B;
+      --text-dim: #94A3B8;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      --glow: 0 0 0 3px rgba(10,102,194,0.14);
+      --danger-soft: #FEE2E2;
+      --success-soft: #DCFCE7;
+      --info-soft: #DBEAFE;
+      --warning-soft: #FEF3C7;
+      --chart-brand-fill: rgba(10,102,194,0.14);
+      --chart-success-fill: rgba(22,163,74,0.72);
+      --chart-danger-fill: rgba(220,38,38,0.72);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+      overscroll-behavior: none;
+    }
+
+    /* === TOP HEADER === */
+    .app-header {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-light) 100%);
+      padding: 48px 20px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 20px rgba(10,102,194,0.24);
+    }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .app-title { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: #fff; }
+    .app-title span { font-family: 'Space Mono', monospace; background: rgba(255,255,255,0.18); padding: 2px 8px; border-radius: 6px; font-size: 14px; margin-left: 6px; vertical-align: middle; }
+    .btn-config { background: rgba(255,255,255,0.18); border: none; color: #fff; width: 44px; height: 44px; border-radius: 12px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .month-filter { display: flex; align-items: center; gap: 10px; }
+    .month-label { font-size: 13px; color: rgba(255,255,255,0.8); font-weight: 600; }
+    #filtroMes { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.38); color: #fff; padding: 8px 12px; border-radius: 10px; font-size: 14px; font-family: 'Barlow', sans-serif; font-weight: 600; flex: 1; }
+
+    /* === BOTTOM NAV === */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; z-index: 200; padding-bottom: env(safe-area-inset-bottom); }
+    .nav-btn { flex: 1; background: none; border: none; color: var(--text-muted); padding: 10px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; font-family: 'Barlow', sans-serif; font-weight: 600; transition: color 0.2s; }
+    .nav-btn .nav-icon { font-size: 22px; }
+    .nav-btn.active { color: var(--brand); }
+
+    /* === PAGES === */
+    .page { display: none; padding: 16px; }
+    .page.active { display: block; }
+
+    /* === CARDS === */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 14px; }
+
+    /* === STATS === */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .stats-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+    .stat-label { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; }
+    .stat-value { font-size: 18px; font-weight: 800; font-family: 'Space Mono', monospace; line-height: 1; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.brand { color: var(--brand); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-card.highlight { grid-column: 1 / -1; border-color: rgba(10,102,194,0.24); background: var(--info-soft); }
+    .stat-card.highlight-green { grid-column: 1 / -1; border-color: rgba(22,163,74,0.24); background: var(--success-soft); }
+
+    /* === SECTION HEADER === */
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .section-title { font-size: 16px; font-weight: 800; color: var(--text); }
+    .badge { background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+    .badge-green { background: var(--green); color: #000; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+
+    /* === BUTTONS === */
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 16px; border: none; border-radius: var(--radius-sm); font-size: 16px; font-weight: 700; font-family: 'Barlow', sans-serif; cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 4px 16px rgba(10,102,194,0.24); }
+    .btn-primary:active { background: var(--brand-dark); }
+    .btn-success { background: var(--green); color: #fff; box-shadow: 0 4px 16px rgba(22,163,74,0.24); }
+    .btn-success:active { background: var(--green-dark); }
+    .btn-danger { background: var(--danger-soft); color: var(--red); border: 1px solid rgba(220,38,38,0.24); }
+    .btn-secondary { background: var(--surface3); color: var(--text); border: 1px solid var(--border); }
+    .btn-blue { background: var(--blue); color: #fff; box-shadow: 0 4px 16px rgba(30,136,229,0.24); }
+    .btn-sm { padding: 10px 14px; font-size: 13px; width: auto; border-radius: 8px; }
+    .btn-icon { font-size: 18px; }
+
+    /* === MODO RÁPIDO === */
+    .quick-mode-btn {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-light) 100%);
+      border: none; color: #fff; width: 100%;
+      padding: 20px; border-radius: var(--radius);
+      font-size: 18px; font-weight: 900;
+      font-family: 'Barlow', sans-serif;
+      cursor: pointer; margin-bottom: 12px;
+      box-shadow: 0 6px 24px rgba(10,102,194,0.24);
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; letter-spacing: 0.5px;
+      transition: all 0.2s;
+    }
+    .quick-mode-btn:active { transform: scale(0.97); }
+
+    /* === ALERTA ROTA === */
+    .alert-box {
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .alert-box.danger { background: var(--danger-soft); border: 1px solid rgba(220,38,38,0.24); color: var(--red); }
+    .alert-box.warning { background: var(--warning-soft); border: 1px solid rgba(245,158,11,0.24); color: var(--yellow); }
+    .alert-box.success { background: var(--success-soft); border: 1px solid rgba(22,163,74,0.24); color: var(--green); }
+    .alert-box.info { background: var(--info-soft); border: 1px solid rgba(10,102,194,0.24); color: var(--brand); }
+
+    /* === GPS ROUTE SECTION === */
+    .route-status { background: var(--surface2); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px; border: 1px solid var(--border); }
+    .route-status-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .route-status-value { font-size: 28px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--text); }
+    .route-status-value.running { color: var(--green); }
+    .route-timer { font-size: 13px; color: var(--text-muted); margin-top: 4px; font-family: 'Space Mono', monospace; }
+    .gps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .gps-info { background: var(--surface3); border-radius: 8px; padding: 10px; font-size: 12px; }
+    .gps-info-label { color: var(--text-muted); font-weight: 600; margin-bottom: 3px; }
+    .gps-info-val { font-family: 'Space Mono', monospace; color: var(--text); font-size: 11px; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+
+    /* === MAPA === */
+    #mapaRota { height: 220px; border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border); background: var(--surface3); }
+
+    /* === PREVISÃO TEMPO REAL === */
+    .preview-live {
+      background: var(--success-soft);
+      border: 1px solid rgba(22,163,74,0.24);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .preview-live.negative {
+      background: var(--danger-soft);
+      border-color: rgba(220,38,38,0.24);
+    }
+    .preview-live-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--text-muted); margin-bottom: 10px;
+    }
+    .preview-live-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .preview-item { text-align: center; }
+    .preview-item-val { font-size: 16px; font-weight: 800; font-family: 'Space Mono', monospace; }
+    .preview-item-label { font-size: 10px; color: var(--text-muted); font-weight: 600; margin-top: 3px; }
+
+    /* === FORM ELEMENTS === */
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+    input, select, datalist { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--text); font-size: 16px; font-family: 'Barlow', sans-serif; transition: border-color 0.2s; -webkit-appearance: none; }
+    input:focus, select:focus { outline: none; border-color: var(--brand); box-shadow: var(--glow); }
+    input::placeholder { color: var(--text-dim); }
+    select option { background: var(--surface2); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* === ROUTE LIST === */
+    .route-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px; position: relative; }
+    .route-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .route-item-empresa { font-size: 15px; font-weight: 800; color: var(--text); }
+    .route-item-data { font-size: 12px; color: var(--text-muted); }
+    .route-item-profit { font-size: 18px; font-weight: 800; font-family: 'Space Mono', monospace; }
+    .route-item-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-muted); }
+    .route-item-meta span { display: flex; align-items: center; gap: 4px; }
+    .route-delete { position: absolute; top: 12px; right: 12px; background: var(--danger-soft); border: 1px solid rgba(220,38,38,0.24); color: var(--red); padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Barlow', sans-serif; }
+
+    /* === AJUDANTE CARD === */
+    .ajudante-card { background: var(--warning-soft); border: 1px solid rgba(245,158,11,0.24); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+    .ajudante-badge { display: inline-block; background: var(--yellow); color: #000; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+
+    /* === DASHBOARD INTEL === */
+    .insight-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+    .insight-icon { font-size: 28px; flex-shrink: 0; }
+    .insight-title { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+    .insight-value { font-size: 17px; font-weight: 800; color: var(--text); }
+    .insight-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* === PERFORMANCE METRICS === */
+    .perf-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .perf-item { background: var(--surface3); border-radius: 10px; padding: 12px; text-align: center; }
+    .perf-value { font-size: 18px; font-weight: 800; font-family: 'Space Mono', monospace; color: var(--brand); line-height: 1; }
+    .perf-label { font-size: 10px; color: var(--text-muted); font-weight: 600; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* === TOAST === */
+    .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface3); color: var(--text); padding: 12px 20px; border-radius: 30px; font-size: 14px; font-weight: 600; opacity: 0; transition: all 0.3s; z-index: 300; border: 1px solid var(--border); white-space: nowrap; box-shadow: var(--shadow); }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.error { border-color: var(--red); color: var(--red); }
+
+    /* === MODAL === */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 400; display: none; align-items: flex-end; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border-radius: 24px 24px 0 0; padding: 24px 20px 40px; width: 100%; max-height: 92vh; overflow-y: auto; border: 1px solid var(--border); border-bottom: none; }
+    .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+    .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+
+    /* === MODO RÁPIDO MODAL === */
+    .quick-field { background: var(--surface2); border-radius: var(--radius); padding: 20px; margin-bottom: 10px; }
+    .quick-field label { font-size: 14px; color: var(--text-muted); margin-bottom: 10px; }
+    .quick-field input { font-size: 24px; font-weight: 800; font-family: 'Space Mono', monospace; background: transparent; border: none; border-bottom: 2px solid var(--border); border-radius: 0; padding: 8px 0; color: var(--text); }
+    .quick-field input:focus { border-bottom-color: var(--brand); box-shadow: none; }
+
+    /* === EMPTY STATE === */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+    .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* === CHART === */
+    .chart-wrap { background: var(--surface2); border-radius: var(--radius-sm); padding: 14px; }
+    .chart-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .chart-tab { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--text-muted); font-size: 12px; font-weight: 700; font-family: 'Barlow', sans-serif; cursor: pointer; }
+    .chart-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+    /* === WEEK DIVIDER === */
+    .week-divider { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 14px 0 8px; display: flex; align-items: center; gap: 8px; }
+    .week-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* === INSTALL BANNER === */
+    #installBanner { display: none; background: linear-gradient(135deg, var(--brand) 0%, var(--brand-light) 100%); padding: 14px 16px; align-items: center; gap: 12px; }
+    #installBanner.show { display: flex; }
+    #installBanner p { flex: 1; font-size: 13px; color: #fff; font-weight: 600; }
+    #btnInstall { padding: 8px 16px; font-size: 13px; background: rgba(255,255,255,0.25); color: #fff; border: 1px solid rgba(255,255,255,0.5); border-radius: 8px; cursor: pointer; font-weight: 700; font-family: 'Barlow', sans-serif; }
+    #btnDismiss { color: rgba(255,255,255,0.7); background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px; }
+
+    /* === SETTINGS === */
+    .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--surface2); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; }
+    .settings-item-text { font-size: 15px; font-weight: 600; }
+    .settings-item-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .settings-item-arrow { color: var(--text-muted); font-size: 18px; }
+    .settings-input-group { background: var(--surface2); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 8px; }
+    .settings-input-group label { font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: block; }
+
+    /* === DIAS DA SEMANA === */
+    .days-bar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .day-item { background: var(--surface3); border-radius: 8px; padding: 8px 4px; text-align: center; }
+    .day-name { font-size: 9px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+    .day-value { font-size: 11px; font-weight: 800; font-family: 'Space Mono', monospace; color: var(--text-muted); }
+    .day-item.best { background: var(--success-soft); border: 1px solid rgba(22,163,74,0.24); }
+    .day-item.best .day-value { color: var(--green); }
+    .day-item.best .day-name { color: var(--green); }
+
+    /* === DASHBOARD PERFORMANCE === */
+    .performance-section { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .performance-section:last-child { border-bottom: none; }
+    .section-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 12px; }
+    
+    .performance-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+    .perf-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+    .perf-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+    .perf-value { font-size: 18px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--text); margin-bottom: 4px; }
+    .perf-value.green { color: var(--green); }
+    .perf-value.blue { color: var(--brand); }
+    .perf-meta { font-size: 11px; color: var(--text-dim); }
+
+    .efficiency-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .eff-card { background: linear-gradient(135deg, var(--info-soft) 0%, var(--surface2) 100%); border: 1px solid rgba(10,102,194,0.24); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+    .eff-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+    .eff-value { font-size: 16px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--brand); }
+
+    .best-worst-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .best-day, .worst-day { border-radius: var(--radius-sm); padding: 14px; text-align: center; }
+    .best-day { background: var(--success-soft); border: 1px solid rgba(22,163,74,0.24); }
+    .worst-day { background: var(--danger-soft); border: 1px solid rgba(220,38,38,0.24); }
+    .best-icon, .worst-icon { font-size: 24px; margin-bottom: 8px; }
+    .best-label, .worst-label { font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+    .best-name, .worst-name { font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+    .best-value { font-size: 16px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--green); margin-bottom: 4px; }
+    .worst-value { font-size: 16px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--red); margin-bottom: 4px; }
+    .best-meta, .worst-meta { font-size: 10px; color: var(--text-dim); }
+    .no-data { background: var(--surface3); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 14px; color: var(--text-muted); font-size: 13px; display: flex; align-items: center; justify-content: center; }
+
+    .insight-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; }
+    .insight-item.insight-sucesso { background: var(--success-soft); border-color: rgba(22,163,74,0.24); }
+    .insight-item.insight-aviso { background: var(--warning-soft); border-color: rgba(245,158,11,0.24); }
+    .insight-item.insight-info { background: var(--info-soft); border-color: rgba(10,102,194,0.24); }
+    .insight-header { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; }
+    .insight-icon { font-size: 16px; }
+    .insight-title { font-size: 12px; font-weight: 800; color: var(--text); }
+    .insight-message { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+    @media (max-width: 600px) {
+      .performance-grid, .efficiency-grid, .best-worst-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .page.active .card, .page.active .route-item, .page.active .stat-card, .page.active .ajudante-card { animation: fadeIn 0.3s ease both; }
+    .pulsing { animation: pulse 1.5s ease infinite; }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 16px 0 10px; }
+    .auth-panel, .loading-overlay { position: fixed; inset: 0; background: rgba(244,247,251,0.96); z-index: 700; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .auth-panel.open, .loading-overlay.open { display: flex; }
+    .auth-box { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+    .auth-title { font-size: 24px; font-weight: 900; margin-bottom: 8px; }
+    .auth-sub { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px; }
+    .auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .auth-user { font-size: 12px; color: rgba(255,255,255,0.85); font-weight: 700; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+    .btn-header { background: rgba(255,255,255,0.2); border: none; color: #fff; min-width: 44px; height: 44px; border-radius: 12px; padding: 0 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
+    .progress-track { height: 10px; background: var(--surface3); border-radius: 999px; overflow: hidden; margin: 8px 0 12px; border: 1px solid var(--border); }
+    .progress-bar { height: 100%; width: 0%; background: var(--green); border-radius: 999px; transition: width 0.25s ease; }
+    .today-card { border: 1px solid rgba(10,102,194,0.22); background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%); }
+    .today-card.success { border-color: rgba(22,163,74,0.3); background: linear-gradient(180deg, #FFFFFF 0%, #F0FDF4 100%); }
+    .today-card.danger { border-color: rgba(220,38,38,0.3); background: linear-gradient(180deg, #FFFFFF 0%, #FEF2F2 100%); }
+    .today-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:12px; }
+    .today-title { font-size: 13px; font-weight: 900; color: var(--brand); text-transform: uppercase; letter-spacing: 0.8px; }
+    .today-main { font-size: 34px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--text); line-height: 1; }
+    .today-restante { text-align:right; min-width: 120px; }
+    .today-restante-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+    .today-restante-value { font-size: 20px; font-weight: 900; color: var(--brand); font-family: 'Space Mono', monospace; }
+    .today-grid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .today-mini { background: rgba(255,255,255,0.7); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+    .today-mini-label { color: var(--text-muted); font-size: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; }
+    .today-mini-value { color: var(--text); font-size: 16px; font-weight: 900; font-family: 'Space Mono', monospace; }
+    .today-status { border-radius: var(--radius-sm); padding: 12px; font-weight: 800; font-size: 14px; margin-top: 12px; }
+    .today-status.info { background: var(--info-soft); color: var(--brand); }
+    .today-status.success { background: var(--success-soft); color: var(--green); }
+    .today-status.danger { background: var(--danger-soft); color: var(--red); }
+
+    /* === MODO TRABALHO ATIVO === */
+    .trabalho-ativo-card { background: linear-gradient(180deg, var(--surface) 0%, var(--surface3) 100%); border: 2px solid rgba(10,102,194,0.24); border-radius: var(--radius); padding: 16px; box-shadow: 0 12px 32px rgba(10,102,194,0.12); }
+    .trabalho-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .trabalho-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .trabalho-tempo { font-size: 32px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--brand); }
+    .trabalho-badge { display: inline-block; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .trabalho-badge.em-progresso { background: var(--info-soft); color: var(--brand); }
+    .trabalho-badge.atingida { background: var(--success-soft); color: var(--green); }
+    .trabalho-badge.prejuizo { background: var(--danger-soft); color: var(--red); }
+
+    .metricas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .metrica-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+    .metrica-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+    .metrica-valor { font-size: 18px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--text); }
+    .metrica-valor.verde { color: var(--green); }
+    .metrica-valor.vermelho { color: var(--red); }
+    .metrica-valor.amarelo { color: var(--yellow); }
+
+    .previsao-container { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px; }
+    .previsao-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+    .previsao-valor { font-size: 24px; font-weight: 900; font-family: 'Space Mono', monospace; margin-bottom: 8px; }
+    .previsao-valor.verde { color: var(--green); }
+    .previsao-valor.amarelo { color: var(--yellow); }
+    .previsao-valor.vermelho { color: var(--red); }
+    .previsao-desc { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
+    .progresso-container { margin-bottom: 16px; }
+    .progresso-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .progresso-barra { width: 100%; height: 12px; background: var(--surface3); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+    .progresso-fill { height: 100%; background: linear-gradient(90deg, var(--brand) 0%, var(--brand-light) 100%); border-radius: 999px; transition: width 0.4s ease; }
+    .progresso-fill.verde { background: linear-gradient(90deg, var(--green) 0%, var(--green-dark) 100%); }
+    .progresso-fill.vermelho { background: linear-gradient(90deg, var(--red) 0%, var(--red) 100%); }
+
+    .alertas-container { margin-bottom: 16px; }
+    .alertas-container.empty { background: var(--success-soft); border: 1px solid rgba(22,163,74,0.24); border-radius: var(--radius-sm); padding: 16px; text-align: center; }
+    .alertas-vazio { color: var(--green); font-weight: 700; font-size: 14px; }
+    .alertas-titulo { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 10px; }
+    .alerta { border-radius: var(--radius-sm); border: 1px solid; padding: 12px; margin-bottom: 8px; }
+    .alerta-sucesso { background: var(--success-soft); border-color: rgba(22,163,74,0.24); color: var(--green); }
+    .alerta-aviso { background: var(--warning-soft); border-color: rgba(245,158,11,0.24); color: var(--yellow); }
+    .alerta-erro { background: var(--danger-soft); border-color: rgba(220,38,38,0.24); color: var(--red); }
+    .alerta-info { background: var(--info-soft); border-color: rgba(10,102,194,0.24); color: var(--brand); }
+    .alerta-titulo { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+    .alerta-mensagem { font-size: 12px; line-height: 1.4; }
+
+    .sugestao-container { background: var(--info-soft); border: 1px solid rgba(10,102,194,0.24); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px; }
+    .sugestao-container.sugestao-sucesso { background: var(--success-soft); border-color: rgba(22,163,74,0.24); }
+    .sugestao-container.sugestao-aviso { background: var(--warning-soft); border-color: rgba(245,158,11,0.24); }
+    .sugestao-titulo { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+    .sugestao-mensagem { font-size: 14px; font-weight: 700; line-height: 1.5; }
+    .sugestao-container.sugestao-sucesso .sugestao-mensagem { color: var(--green); }
+    .sugestao-container.sugestao-aviso .sugestao-mensagem { color: var(--yellow); }
+    .sugestao-container.sugestao-info .sugestao-mensagem { color: var(--brand); }
+
+    .card-empty { display: flex; align-items: center; justify-content: center; min-height: 280px; background: linear-gradient(180deg, var(--surface) 0%, var(--surface3) 100%); }
+    .btn-lg { padding: 20px; font-size: 16px; }
+    .btn-danger { background: var(--danger-soft); color: var(--red); }
+    .btn-danger:active { background: rgba(220,38,38,0.15); }
+
+    @media (max-width: 420px) {
+      .today-head { display:block; }
+      .today-restante { text-align:left; margin-top:12px; }
+      .today-grid { grid-template-columns: 1fr; }
+      .stats-grid, .form-row, .metricas-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="auth-box">
+    <div class="auth-title" id="loadingText">Carregando...</div>
+    <div class="auth-sub">Aguarde enquanto o Entrega Pro conversa com o banco local e o Supabase.</div>
+  </div>
+</div>
+
+<div class="auth-panel open" id="authPanel">
+  <div class="auth-box">
+    <div class="auth-title">Entrar no Entrega Pro</div>
+    <div class="auth-sub">Use email e senha do Supabase Auth. A sessao fica persistida e seus dados continuam salvos offline.</div>
+    <div class="alert-box warning" id="supabaseConfigWarn" style="display:none">Configure `src/config.js` com a URL e anon key do Supabase antes de entrar em producao.</div>
+    <form id="authForm" autocomplete="on">
+      <div class="form-group">
+        <label>Nome (cadastro)</label>
+        <input type="text" id="authNome" autocomplete="name" placeholder="Seu nome"/>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="authEmail" autocomplete="email" required placeholder="voce@email.com"/>
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" id="authPassword" autocomplete="current-password" required placeholder="Senha"/>
+      </div>
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-primary">Entrar</button>
+        <button type="button" class="btn btn-secondary" data-action="signup">Criar conta</button>
+      </div>
+      <div class="auth-actions" style="margin-top: 8px">
+        <button type="button" class="btn btn-blue" data-action="google-login">Entrar com Google</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Install Banner -->
+<div id="installBanner">
+  <p>📦 Instale o Entrega Pro no seu celular!</p>
+  <button id="btnInstall">Instalar</button>
+  <button id="btnDismiss">✕</button>
+</div>
+
+<!-- App Header -->
+<header class="app-header">
+  <div class="header-top">
+    <div class="app-title">Entrega Pro <span id="headerStatus">●</span></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="auth-user" id="authUserEmail"></div>
+      <button class="btn-header" data-action="logout">Sair</button>
+      <button class="btn-config" data-action="go-settings">⚙️</button>
+    </div>
+  </div>
+  <div class="month-filter">
+    <span class="month-label">📅 Mês:</span>
+    <input type="month" id="filtroMes"/>
+  </div>
+  <div class="month-filter" style="margin-top:8px">
+    <span class="month-label" id="syncStatusText">Offline-first</span>
+  </div>
+</header>
+
+<!-- ===================== PAGE HOME ===================== -->
+<div id="page-home" class="page active">
+
+  <!-- Modo Trabalho Ativo -->
+  <div id="containerTrabalhoAtivo"></div>
+
+  <div class="card today-card" id="modoHojeCard">
+    <div class="today-head">
+      <div>
+        <div class="today-title">Hoje</div>
+        <div class="today-main" id="hojeMetaDia">R$ 0,00</div>
+        <div class="today-restante-label">Meta do dia</div>
+      </div>
+      <div class="today-restante">
+        <div class="today-restante-label">Restante</div>
+        <div class="today-restante-value" id="hojeRestante">R$ 0,00</div>
+      </div>
+    </div>
+    <div class="today-grid">
+      <div class="today-mini">
+        <div class="today-mini-label">Mínimo sem prejuízo</div>
+        <div class="today-mini-value" id="hojeMinimo">R$ 0,00</div>
+      </div>
+      <div class="today-mini">
+        <div class="today-mini-label">Entregas necessárias</div>
+        <div class="today-mini-value" id="hojeEntregas">-</div>
+      </div>
+      <div class="today-mini">
+        <div class="today-mini-label">KM necessário</div>
+        <div class="today-mini-value" id="hojeKm">-</div>
+      </div>
+    </div>
+    <div class="today-status info" id="hojeStatus">Planeje seu dia para bater a meta.</div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <div class="card-title">Hoje</div>
+    <div class="stats-grid">
+      <div class="stat-card highlight-green"><div class="stat-label">Lucro do Dia</div><div class="stat-value green" id="statLucroDia">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Custo Total</div><div class="stat-value red" id="statCustoDia">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">KM Rodado</div><div class="stat-value brand" id="statKmDia">0 km</div></div>
+      <div class="stat-card"><div class="stat-label">Eficiência</div><div class="stat-value blue" id="statEficienciaDia">-</div></div>
+    </div>
+  </div>
+
+  <!-- Semana Atual -->
+  <div class="card">
+    <div class="card-title">📊 Semana Atual</div>
+    <div class="stats-grid" id="statsSemana">
+      <div class="stat-card"><div class="stat-label">Lucro Líq.</div><div class="stat-value green" id="statLucroSemana">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Ajudante</div><div class="stat-value red" id="statAjudanteSemana">R$ 0,00</div></div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Rotas</div><div class="stat-value brand" id="statRotasSemana">0</div></div>
+      <div class="stat-card"><div class="stat-label">KM Total</div><div class="stat-value brand" id="statKmSemana">0 km</div></div>
+    </div>
+    <!-- Performance da Semana -->
+    <div class="section-label">⚡ Performance</div>
+    <div class="perf-grid" id="perfSemana">
+      <div class="perf-item"><div class="perf-value" id="perfLucroHora">—</div><div class="perf-label">R$/hora</div></div>
+      <div class="perf-item"><div class="perf-value" id="perfEntregasHora">—</div><div class="perf-label">Entregas/h</div></div>
+      <div class="perf-item"><div class="perf-value" id="perfValorEntrega">—</div><div class="perf-label">R$/entrega</div></div>
+    </div>
+  </div>
+
+  <!-- Ajudante Semana Anterior -->
+  <div id="ajudanteSection"></div>
+
+  <!-- Resumo Mensal -->
+  <div class="card">
+    <div class="card-title" id="tituloResumoMensal">📆 Resumo do Mês</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Faturado</div><div class="stat-value brand" id="statFaturado">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Gastos</div><div class="stat-value red" id="statGastos">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Lucro Líq.</div><div class="stat-value green" id="statLucro">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Vales</div><div class="stat-value yellow" id="statVales">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Combustível</div><div class="stat-value yellow" id="statCombustivelMes">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Custos Fixos</div><div class="stat-value red" id="statFixosMes">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">KM Mês</div><div class="stat-value brand" id="statKmMes">0 km</div></div>
+      <div class="stat-card"><div class="stat-label">R$/km</div><div class="stat-value blue" id="statEficienciaMes">-</div></div>
+      <div class="stat-card highlight">
+        <div class="stat-label">Saldo Final do Mês</div>
+        <div class="stat-value green" id="statSaldo">R$ 0,00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Meta Mensal</div>
+    <div class="progress-track"><div class="progress-bar" id="metaProgressBar"></div></div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Meta</div><div class="stat-value brand" id="statMetaMensal">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Feito</div><div class="stat-value green" id="statMetaFeito">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Falta</div><div class="stat-value yellow" id="statMetaFalta">R$ 0,00</div></div>
+      <div class="stat-card"><div class="stat-label">Precisa/dia</div><div class="stat-value blue" id="statMetaDia">R$ 0,00</div></div>
+      <div class="stat-card highlight"><div class="stat-label">Progresso</div><div class="stat-value green" id="statMetaProgresso">0%</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Por Entrega</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Ganho Médio</div><div class="stat-value brand" id="statGanhoEntrega">-</div></div>
+      <div class="stat-card"><div class="stat-label">Custo</div><div class="stat-value red" id="statCustoEntrega">-</div></div>
+      <div class="stat-card highlight-green"><div class="stat-label">Lucro/Entrega</div><div class="stat-value green" id="statLucroEntrega">-</div></div>
+    </div>
+  </div>
+
+  <!-- Dashboard Performance Semanal e Mensal -->
+  <div id="performanceDashboard"></div>
+
+  <!-- Gráfico Semanal -->
+  <div class="card">
+    <div class="card-title">📊 Ganho Médio por Dia da Semana</div>
+    <div class="chart-wrap">
+      <canvas id="graficoSemanal" height="50"></canvas>
+    </div>
+  </div>
+
+  <!-- Dashboard Inteligente -->
+  <div class="card">
+    <div class="card-title">🧠 Inteligência</div>
+    <div id="insightsDashboard">
+      <div class="empty-state" style="padding:20px"><p style="font-size:13px">Adicione rotas para ver insights</p></div>
+    </div>
+  </div>
+
+  <!-- Melhor Dia da Semana -->
+  <div class="card">
+    <div class="card-title">📅 Lucro por Dia da Semana</div>
+    <div class="days-bar" id="diasSemanaBar"></div>
+  </div>
+
+  <!-- Gráfico com abas -->
+  <div class="card">
+    <div class="card-title" id="tituloGrafico">📈 Evolução</div>
+    <div class="chart-tabs">
+      <button class="chart-tab active" data-chart-mode="diario">Diário</button>
+      <button class="chart-tab" data-chart-mode="semanal">Semanal</button>
+      <button class="chart-tab" data-chart-mode="acumulado">Acumulado</button>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="graficoLucros" height="160"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PAGE ROTA ===================== -->
+<div id="page-rota" class="page">
+
+  <!-- Botão Modo Rápido -->
+  <button class="quick-mode-btn" style="margin-top:12px" data-action="quick-route">
+    ⚡ REGISTRO RÁPIDO DE ROTA
+  </button>
+
+  <!-- GPS Card -->
+  <div class="card">
+    <div class="card-title">🛰️ GPS da Rota</div>
+
+    <!-- Mapa -->
+    <div id="mapaRota"></div>
+
+    <div class="gps-grid">
+      <div class="gps-info"><div class="gps-info-label">Início</div><div class="gps-info-val" id="gpsInicio">--</div></div>
+      <div class="gps-info"><div class="gps-info-label">Duração</div><div class="gps-info-val" id="gpsDuracao">00:00:00</div></div>
+      <div class="gps-info"><div class="gps-info-label">KM (GPS)</div><div class="gps-info-val" id="gpsKm">0 km</div></div>
+      <div class="gps-info"><div class="gps-info-label">Velocidade</div><div class="gps-info-val" id="gpsVelocidade">0 km/h</div></div>
+    </div>
+
+    <!-- Previsão em Tempo Real -->
+    <div id="previewLive" style="display:none">
+      <div class="preview-live" id="previewLiveBox">
+        <div class="preview-live-title">⚡ Previsão em Tempo Real</div>
+        <div class="preview-live-grid">
+          <div class="preview-item">
+            <div class="preview-item-val green" id="prevLucro">R$0</div>
+            <div class="preview-item-label">Lucro est.</div>
+          </div>
+          <div class="preview-item">
+            <div class="preview-item-val yellow" id="prevCombustivel">R$0</div>
+            <div class="preview-item-label">Combustível</div>
+          </div>
+          <div class="preview-item">
+            <div class="preview-item-val brand" id="prevLucroHora">0/h</div>
+            <div class="preview-item-label">R$/hora</div>
+          </div>
+        </div>
+      </div>
+      <div id="alertaNegativo" style="display:none">
+        <div class="alert-box danger">⚠️ <span>Lucro estimado negativo! Verifique os custos.</span></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-success" id="btnIniciarRota">
+        <span class="btn-icon">▶</span> Iniciar Rota
+      </button>
+      <button class="btn btn-danger" id="btnFinalizarRota" disabled>
+        <span class="btn-icon">■</span> Finalizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Form Adicionar Rota -->
+  <div class="card">
+    <div class="card-title">➕ Registrar Rota Completa</div>
+    <form id="formRota" autocomplete="off">
+      <div class="form-group">
+        <label>Empresa</label>
+        <input type="text" id="empresa" placeholder="Shopee, Amazon, Mercado Livre..." list="empresasSuggestions" required/>
+        <datalist id="empresasSuggestions"></datalist>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" id="data" required/>
+        </div>
+        <div class="form-group">
+          <label>Duração (min)</label>
+          <input type="number" id="duracao" placeholder="120" inputmode="numeric"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor da Rota (R$)</label>
+          <input type="number" id="valor" step="0.01" placeholder="0,00" inputmode="decimal" required/>
+        </div>
+        <div class="form-group">
+          <label>Qtd. Entregas</label>
+          <input type="number" id="qtdEntregas" placeholder="0" inputmode="numeric"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>KM Rodado</label>
+        <input type="number" id="km" step="0.1" placeholder="0" inputmode="decimal" required/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Consumo (km/L)</label>
+          <input type="number" id="consumoVeiculo" step="0.1" placeholder="10.5" inputmode="decimal"/>
+        </div>
+        <div class="form-group">
+          <label>Combustível (R$/L)</label>
+          <input type="number" id="precoCombustivel" step="0.01" placeholder="5.89" inputmode="decimal"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ajudante (R$)</label>
+          <input type="number" id="ajudante" step="0.01" value="0" inputmode="decimal"/>
+        </div>
+        <div class="form-group">
+          <label>Outros Gastos (R$)</label>
+          <input type="number" id="outros" step="0.01" value="0" inputmode="decimal"/>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <span>💾</span> Salvar Rota
+      </button>
+    </form>
+  </div>
+
+  <!-- Form Vale -->
+  <div class="card">
+    <div class="card-title">💵 Registrar Vale</div>
+    <form id="formVale" autocomplete="off">
+      <div class="form-group">
+        <label>Data do Vale</label>
+        <input type="date" id="dataVale" required/>
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="valorVale" step="0.01" inputmode="decimal" required/>
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <input type="text" id="descricaoVale" placeholder="Ex: Vale para almoço"/>
+      </div>
+      <button type="submit" class="btn btn-secondary">
+        <span>💵</span> Registrar Vale
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== PAGE HISTÓRICO ===================== -->
+<div id="page-historico" class="page">
+  <div class="card" style="margin-top:12px;">
+    <div class="section-header">
+      <div class="section-title" id="tituloTabelaRotas">Rotas do Mês</div>
+      <span class="badge" id="badgeRotas">0</span>
+    </div>
+    <div id="listaRotas"></div>
+  </div>
+</div>
+
+<!-- ===================== PAGE SETTINGS ===================== -->
+<div id="page-settings" class="page">
+  <div class="card" style="margin-top:12px;">
+    <div class="card-title">⚙️ Configurações do Veículo</div>
+    <div class="settings-input-group">
+      <label>Custo por KM (R$/km) — custo fixo (pneus, manutenção...)</label>
+      <input type="number" id="custoPorKm" step="0.01" placeholder="0.15" inputmode="decimal" />
+    </div>
+    <div class="settings-input-group">
+      <label>Consumo Padrão do Veículo (km/L)</label>
+      <input type="number" id="consumoPadrao" step="0.1" placeholder="10.5" inputmode="decimal" />
+    </div>
+    <div class="settings-input-group">
+      <label>Preço Padrão do Combustível (R$/L)</label>
+      <input type="number" id="combustivelPadrao" step="0.01" placeholder="5.89" inputmode="decimal" />
+    </div>
+    <div class="settings-input-group">
+      <label>Meta Mensal de Lucro Líquido (R$)</label>
+      <input type="number" id="metaMensal" step="0.01" placeholder="5000" inputmode="decimal" />
+    </div>
+    <div class="form-row">
+      <div class="settings-input-group">
+        <label>Parcela do Carro (R$/mês)</label>
+        <input type="number" id="parcelaCarro" step="0.01" placeholder="0" inputmode="decimal" />
+      </div>
+      <div class="settings-input-group">
+        <label>Seguro (R$/mês)</label>
+        <input type="number" id="seguroMensal" step="0.01" placeholder="0" inputmode="decimal" />
+      </div>
+    </div>
+    <div class="settings-input-group">
+      <label>Manutenção Mensal Fixa (R$/mês)</label>
+      <input type="number" id="manutencaoMensal" step="0.01" placeholder="0" inputmode="decimal" />
+    </div>
+    <div class="settings-input-group">
+      <label style="display:flex;align-items:center;gap:10px;text-transform:none;letter-spacing:0">
+        <input type="checkbox" id="custoIncluiCombustivel" style="width:auto"/>
+        Custo por KM já inclui combustível
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">☁️ Dados & Backup</div>
+    <div class="settings-item" data-action="export">
+      <div><div class="settings-item-text">📤 Exportar Dados</div><div class="settings-item-sub">Baixar backup JSON</div></div>
+      <div class="settings-item-arrow">›</div>
+    </div>
+    <div class="settings-item" data-action="import">
+      <div><div class="settings-item-text">📥 Importar Dados</div><div class="settings-item-sub">Restaurar de backup</div></div>
+      <div class="settings-item-arrow">›</div>
+    </div>
+    <input type="file" id="importInput" accept=".json" style="display:none" />
+    <div style="margin-top:16px;">
+      <button class="btn btn-danger" id="btnResetar">🗑️ Apagar Todos os Dados</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔮 Integrações Futuras</div>
+    <div class="alert-box info">
+      Supabase ativo para backend. Estrutura preparada para Nuvemshop via backend, sem expor tokens no app.
+    </div>
+    <button class="btn btn-secondary" style="margin-top:8px" data-action="firebase">
+      ☁️ Ver estrutura de integrações
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ℹ️ Sobre</div>
+    <div style="font-size:14px; color:var(--text-muted); line-height:1.8;">
+      <p><strong style="color:var(--text)">Entrega Pro</strong> v3.0</p>
+      <p>App profissional de controle de rotas.</p>
+      <p style="margin-top:8px; color:var(--text-dim)">Offline-first com IndexedDB e fila de sincronização.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" id="nav-home" data-page="home">
+    <span class="nav-icon">🏠</span>Início
+  </button>
+  <button class="nav-btn" id="nav-rota" data-page="rota">
+    <span class="nav-icon">📦</span>Rota
+  </button>
+  <button class="nav-btn" id="nav-historico" data-page="historico">
+    <span class="nav-icon">📋</span>Histórico
+  </button>
+  <button class="nav-btn" id="nav-settings" data-page="settings">
+    <span class="nav-icon">⚙️</span>Config
+  </button>
+</nav>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ===================== MODAL MODO RÁPIDO ===================== -->
+<div class="modal-overlay" id="modalRapido">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚡ Registro Rápido</div>
+    <div class="quick-field">
+      <label>🏢 Empresa</label>
+      <input type="text" id="qEmpresa" placeholder="Shopee..." list="empresasSuggestions"/>
+    </div>
+    <div class="quick-field">
+      <label>💰 Valor Ganho (R$)</label>
+      <input type="number" id="qValor" placeholder="0,00" inputmode="decimal"/>
+    </div>
+    <div class="quick-field">
+      <label>📦 Quantas entregas?</label>
+      <input type="number" id="qEntregas" placeholder="0" inputmode="numeric"/>
+    </div>
+    <div class="quick-field">
+      <label>🛣️ KM rodado</label>
+      <input type="number" id="qKm" placeholder="0" inputmode="decimal"/>
+    </div>
+    <div class="quick-field">
+      <label>⏱️ Duração (minutos)</label>
+      <input type="number" id="qDuracao" placeholder="120" inputmode="numeric"/>
+    </div>
+    <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <button class="btn btn-secondary" data-action="close-quick">Cancelar</button>
+      <button class="btn btn-primary" data-action="save-quick">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

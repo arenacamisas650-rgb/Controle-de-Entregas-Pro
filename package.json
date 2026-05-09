@@ -1,0 +1,26 @@
+{
+  "name": "entrega-pro",
+  "version": "2.0.0",
+  "description": "Controle de rotas para motoristas de entrega",
+  "type": "module",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "sync": "npx cap sync android",
+    "open": "npx cap open android",
+    "build": "npx cap sync android && npx cap open android",
+    "build:web": "echo pronto"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@supabase/supabase-js": "^2.105.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "serve": "^14.0.0"
+  },
+  "keywords": ["entrega", "motorista", "logistica", "pwa"],
+  "author": "",
+  "license": "MIT"
+}
