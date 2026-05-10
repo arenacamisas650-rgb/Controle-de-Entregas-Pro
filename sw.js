@@ -16,6 +16,8 @@ const ASSETS = [
   '/src/services/auth.js',
   '/src/services/supabaseClient.js',
   '/src/services/sync.js',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/chart.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.2/dist/umd/supabase.min.js',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',

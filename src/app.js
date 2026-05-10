@@ -367,7 +367,7 @@ const init = async () => {
     showToast(error.message || 'Falha ao iniciar autenticacao.', 'error');
   }
   renderAll(); updateAuthUI(); await mergeRemoteData(); scheduleSync(updateSyncStatus);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
 };
 
 document.addEventListener('DOMContentLoaded', init);

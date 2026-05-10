@@ -9,7 +9,8 @@
     "sync": "npx cap sync android",
     "open": "npx cap open android",
     "build": "npx cap sync android && npx cap open android",
-    "build:web": "echo pronto"
+    "build:web": "echo pronto",
+    "vercel-build": "echo \"skip build\""
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
