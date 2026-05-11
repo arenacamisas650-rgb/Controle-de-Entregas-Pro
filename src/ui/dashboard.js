@@ -21,6 +21,7 @@ import {
 import { clear, el, renderEmpty, setText } from './dom.js';
 
 let chartInstance = null;
+let weeklyChartInstance = null;
 const cssVar = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
 const rotasSemanaAtual = () => {
@@ -311,26 +312,28 @@ export const renderizarGraficoSemanal = () => {
     pointHoverRadius: 8,
   };
 
-  const existingChart = Chart.helpers?.getChart?.(canvas);
-  if (existingChart) {
-    existingChart.destroy();
-  }
-
-  new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: { labels, datasets: [dataset] },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { callback: (value) => `R$${value}` },
+  if (!weeklyChartInstance) {
+    weeklyChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets: [dataset] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: (value) => `R$${value}` },
+          },
         },
       },
-    },
-  });
+    });
+    return;
+  }
+
+  weeklyChartInstance.data.labels = labels;
+  weeklyChartInstance.data.datasets[0] = dataset;
+  weeklyChartInstance.update();
 };
 
 export const renderizarGrafico = () => {

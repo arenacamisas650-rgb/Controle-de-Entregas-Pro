@@ -1,4 +1,4 @@
-const CACHE_NAME = 'entrega-pro-static-v1';
+const CACHE_NAME = 'entrega-pro-static-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -14,9 +14,13 @@ const ASSETS = [
   './src/ui/dom.js',
   './src/ui/dashboard.js',
   './src/ui/historico.js',
+  './src/ui/importacao-flex.js',
   './src/ui/trabalho-ativo.js',
   './src/services/api.js',
   './src/services/auth.js',
+  './src/services/clipboard.js',
+  './src/services/importacao-flex.js',
+  './src/services/ocr.js',
   './src/services/supabaseClient.js',
   './src/services/sync.js'
 ];
@@ -39,6 +43,25 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  const networkFirst = event.request.mode === 'navigate'
+    || url.pathname.endsWith('.js')
+    || url.pathname.endsWith('.json')
+    || url.pathname.endsWith('.html');
+
+  if (networkFirst) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((cached) => cached || fetch(event.request))

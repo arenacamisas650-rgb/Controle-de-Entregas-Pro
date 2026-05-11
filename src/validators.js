@@ -44,6 +44,10 @@ export const validateRoute = (input = {}) => {
     custoPorKmIncluiCombustivel: Boolean(input.custoPorKmIncluiCombustivel),
     ajudante: toNonNegative(input.ajudante),
     outros: toNonNegative(input.outros),
+    origemImportacao: sanitizeText(input.origemImportacao, 60),
+    paradas: Array.isArray(input.paradas)
+      ? input.paradas.map(validateStop).filter((parada) => parada.enderecoCompleto)
+      : [],
     createdAt: input.createdAt || input.created_at || new Date().toISOString(),
     updatedAt: input.updatedAt || input.updated_at || new Date().toISOString(),
     deletedAt: input.deletedAt || input.deleted_at || null,
@@ -55,6 +59,19 @@ export const validateVale = (input = {}) => {
   if (valorVale <= 0) throw new Error('Informe um valor de vale maior que zero.');
   return { id: input.id ? normalizeId(input.id) : createId(), userId: input.userId || input.user_id ? normalizeUuid(input.userId || input.user_id) : '', dataVale: normalizeDate(input.dataVale || input.data_vale), valorVale, descricao: sanitizeText(input.descricao, 120), createdAt: input.createdAt || input.created_at || new Date().toISOString(), updatedAt: input.updatedAt || input.updated_at || new Date().toISOString(), deletedAt: input.deletedAt || input.deleted_at || null };
 };
+
+const validateStop = (input = {}, index = 0) => ({
+  id: input.id ? sanitizeText(input.id, 80) : createId(),
+  ordem: toInteger(input.ordem, index + 1) || index + 1,
+  enderecoCompleto: sanitizeText(input.enderecoCompleto || input.texto || input.raw, 240),
+  rua: sanitizeText(input.rua, 120),
+  numero: sanitizeText(input.numero, 20),
+  cep: sanitizeText(input.cep, 12),
+  complemento: sanitizeText(input.complemento, 80),
+  bairro: sanitizeText(input.bairro, 80),
+  origem: sanitizeText(input.origem || 'manual', 40),
+  arquivo: sanitizeText(input.arquivo, 120),
+});
 
 export const validatePaymentKey = (value) => {
   const key = sanitizeText(value, 20);

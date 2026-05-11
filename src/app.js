@@ -5,9 +5,12 @@ import { validateConfig, validateImportPayload, validatePaymentKey, validateRout
 import { queueSync, scheduleSync, syncNow } from './services/sync.js';
 import { api } from './services/api.js';
 import { auth } from './services/auth.js';
+import { detectarEnderecoNoClipboard, iniciarCapturaClipboard } from './services/clipboard.js';
+import { montarRotaFlex, processarPrintsFlex } from './services/importacao-flex.js';
 import { $, $$, clear, el, setText, showToast } from './ui/dom.js';
 import { renderizarDashboard, renderizarGrafico } from './ui/dashboard.js';
 import { renderizarHistorico } from './ui/historico.js';
+import { abrirImportacaoFlex, inicializarImportacaoFlex } from './ui/importacao-flex.js';
 import { renderizarModoTrabalhoAtivo, aplicarTemasColoresDinamicas } from './ui/trabalho-ativo.js';
 import { trabalhoAtivoManager } from './realtime.js';
 
@@ -191,6 +194,24 @@ const salvarModoRapido = async () => {
   } catch (error) { showToast(error.message, 'error'); }
 };
 
+const confirmarImportacaoFlex = async ({ enderecos, data, empresa, valor, km, duracao }) => {
+  const rota = montarRotaFlex({
+    enderecos,
+    data,
+    empresa,
+    valor,
+    km,
+    duracao,
+    consumoVeiculo: state.config.consumoVeiculo,
+    precoCombustivel: state.config.precoCombustivel,
+    ajudante: 0,
+    outros: 0,
+  });
+  await salvarRota(rota);
+  setPage('historico');
+  showToast(`${enderecos.length} parada(s) importada(s) por OCR.`, 'success');
+};
+
 const exportarDados = () => {
   if (!confirm('Exportar backup JSON dos dados locais?')) return;
   const blob = new Blob([JSON.stringify({ ...snapshotState(), exportadoEm: new Date().toISOString(), versao: '4.0-indexeddb' }, null, 2)], { type: 'application/json' });
@@ -322,6 +343,7 @@ const finalizarRotaGPS = () => {
 const bindEvents = () => {
   $('[data-action="go-settings"]')?.addEventListener('click', () => setPage('settings'));
   $('[data-action="quick-route"]')?.addEventListener('click', abrirModoRapido);
+  $('[data-action="import-flex"]')?.addEventListener('click', abrirImportacaoFlex);
   $('[data-action="export"]')?.addEventListener('click', exportarDados);
   $('[data-action="import"]')?.addEventListener('click', () => $('#importInput')?.click());
   $('[data-action="firebase"]')?.addEventListener('click', () => showToast('Backend preparado. Configure a URL da API quando estiver pronto.', ''));
@@ -377,6 +399,13 @@ const bindEvents = () => {
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); state.pwa.deferredPrompt = e; $('#installBanner')?.classList.add('show'); });
   $('#btnInstall')?.addEventListener('click', async () => { if (!state.pwa.deferredPrompt) return; state.pwa.deferredPrompt.prompt(); const { outcome } = await state.pwa.deferredPrompt.userChoice; state.pwa.deferredPrompt = null; $('#installBanner')?.classList.remove('show'); if (outcome === 'accepted') showToast('App instalado.', 'success'); });
   $('#btnDismiss')?.addEventListener('click', () => $('#installBanner')?.classList.remove('show'));
+  inicializarImportacaoFlex({
+    processarArquivos: processarPrintsFlex,
+    detectarClipboard: detectarEnderecoNoClipboard,
+    iniciarClipboard: iniciarCapturaClipboard,
+    confirmarImportacao: confirmarImportacaoFlex,
+    onErro: (error) => showToast(error.message || 'Nao foi possivel importar prints.', 'error'),
+  });
 };
 
 const inicializarAplicacao = async () => {

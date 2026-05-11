@@ -238,6 +238,36 @@
     .modal { background: var(--surface); border-radius: 24px 24px 0 0; padding: 24px 20px 40px; width: 100%; max-height: 92vh; overflow-y: auto; border: 1px solid var(--border); border-bottom: none; }
     .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
     .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+    .modal-close { position: absolute; right: 18px; top: 18px; width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface3); color: var(--text); font-size: 18px; font-weight: 800; cursor: pointer; }
+    .modal-subtitle { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: -10px 0 18px; }
+
+    /* === IMPORTACAO FLEX OCR === */
+    .import-flex-btn { margin: 0 0 12px; background: var(--surface); color: var(--brand); border: 1px solid rgba(10,102,194,0.26); box-shadow: var(--shadow); }
+    .flex-mode-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0 14px; }
+    .flex-mode-tab { border: 1px solid var(--border); background: var(--surface3); color: var(--text-muted); border-radius: 10px; padding: 10px 6px; font-size: 12px; font-weight: 800; font-family: 'Barlow', sans-serif; cursor: pointer; }
+    .flex-mode-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .flex-mode-panel { margin-bottom: 14px; }
+    .clipboard-status { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface3); padding: 10px; color: var(--text-muted); font-size: 13px; font-weight: 700; margin: 10px 0; }
+    textarea.flex-manual-text { min-height: 160px; resize: vertical; width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--text); font-size: 15px; font-family: 'Barlow', sans-serif; line-height: 1.45; }
+    textarea.flex-manual-text:focus { outline: none; border-color: var(--brand); box-shadow: var(--glow); }
+    .print-preview-list { display: grid; gap: 8px; margin: 12px 0; }
+    .print-preview-item { display: grid; grid-template-columns: 58px 1fr; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface2); }
+    .print-preview-item img { width: 58px; height: 58px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--surface3); }
+    .print-preview-name { font-size: 13px; font-weight: 800; color: var(--text); word-break: break-word; }
+    .print-preview-size { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .progress-track.flex-progress { height: 10px; margin: 10px 0 6px; background: var(--surface3); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+    .progress-track.flex-progress .progress-bar { height: 100%; width: 0; background: var(--brand); transition: width 0.2s; }
+    .import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+    .import-summary-item { background: var(--surface3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+    .import-summary-value { font-size: 20px; font-weight: 900; font-family: 'Space Mono', monospace; color: var(--brand); }
+    .import-summary-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin-top: 2px; }
+    .address-list { display: grid; gap: 8px; margin: 10px 0 14px; max-height: 260px; overflow-y: auto; }
+    .address-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); }
+    .address-item.invalid { display: block; border-color: rgba(220,38,38,0.18); background: var(--danger-soft); }
+    .address-order { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; font-family: 'Space Mono', monospace; }
+    .address-main { font-size: 13px; font-weight: 800; color: var(--text); line-height: 1.35; }
+    .address-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; }
+    .import-section-title { font-size: 12px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin: 14px 0 8px; }
 
     /* === MODO RÁPIDO MODAL === */
     .quick-field { background: var(--surface2); border-radius: var(--radius); padding: 20px; margin-bottom: 10px; }
@@ -652,6 +682,10 @@
     ⚡ REGISTRO RÁPIDO DE ROTA
   </button>
 
+  <button class="btn import-flex-btn" data-action="import-flex">
+    📷 Importar Rotas por Print
+  </button>
+
   <!-- GPS Card -->
   <div class="card">
     <div class="card-title">🛰️ GPS da Rota</div>
@@ -919,6 +953,106 @@
       <button class="btn btn-secondary" data-action="close-quick">Cancelar</button>
       <button class="btn btn-primary" data-action="save-quick">💾 Salvar</button>
     </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL IMPORTACAO FLEX OCR ===================== -->
+<div class="modal-overlay" id="modalImportacaoFlex">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" id="btnFecharFlex" type="button" aria-label="Fechar">×</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title">Importar Amazon Flex</div>
+    <p class="modal-subtitle">Importe a rota por prints, captura automática do clipboard ou colagem manual. Tudo roda localmente, sem acessar conta ou APIs da Amazon.</p>
+
+    <div class="flex-mode-tabs">
+      <button class="flex-mode-tab active" type="button" data-flex-mode="prints">📸 Prints</button>
+      <button class="flex-mode-tab" type="button" data-flex-mode="clipboard">📋 Captura</button>
+      <button class="flex-mode-tab" type="button" data-flex-mode="manual">✍️ Lista</button>
+    </div>
+
+    <div class="flex-mode-panel" data-flex-mode-panel="prints">
+      <input type="file" id="flexPrintInput" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple style="display:none" />
+      <button class="btn btn-secondary" id="btnSelecionarFlex" type="button">Selecionar prints</button>
+      <div class="print-preview-list" id="flexPreviewList"></div>
+
+      <div class="progress-track flex-progress">
+        <div class="progress-bar" id="flexProgressBar"></div>
+      </div>
+      <div class="address-sub" id="flexProgressText">Aguardando prints</div>
+      <button class="btn btn-primary" id="btnProcessarFlex" type="button" disabled>Processar OCR</button>
+    </div>
+
+    <div class="flex-mode-panel" data-flex-mode-panel="clipboard" style="display:none">
+      <div class="clipboard-status" id="flexClipboardStatus">Captura parada</div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnLerClipboard" type="button">Ler agora</button>
+        <button class="btn btn-success" id="btnIniciarClipboard" type="button">Iniciar captura</button>
+      </div>
+      <button class="btn btn-secondary" id="btnPararClipboard" type="button" disabled>Parar captura</button>
+    </div>
+
+    <div class="flex-mode-panel" data-flex-mode-panel="manual" style="display:none">
+      <textarea class="flex-manual-text" id="flexManualText" placeholder="Cole aqui a lista de endereços copiada da Amazon Flex, um por linha ou em bloco."></textarea>
+      <button class="btn btn-primary" id="btnImportarManualFlex" type="button" style="margin-top:10px">Importar lista</button>
+    </div>
+
+    <div class="form-row" style="margin-top:14px">
+      <div class="form-group">
+        <label>Empresa</label>
+        <input type="text" id="flexEmpresa" value="Amazon Flex" />
+      </div>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="flexData" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valor da rota (R$)</label>
+        <input type="number" id="flexValor" step="0.01" inputmode="decimal" placeholder="0,00" />
+      </div>
+      <div class="form-group">
+        <label>KM estimado</label>
+        <input type="number" id="flexKm" step="0.1" inputmode="decimal" placeholder="0" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Duração estimada (min)</label>
+      <input type="number" id="flexDuracao" inputmode="numeric" placeholder="0" />
+    </div>
+
+    <div id="flexResultadoBox" style="display:none">
+      <div class="import-summary">
+        <div class="import-summary-item">
+          <div class="import-summary-value" id="flexQtdEncontrados">0</div>
+          <div class="import-summary-label">Endereços</div>
+        </div>
+        <div class="import-summary-item">
+          <div class="import-summary-value" id="flexQtdInvalidos">0</div>
+          <div class="import-summary-label">Ignorados</div>
+        </div>
+        <div class="import-summary-item">
+          <div class="import-summary-value" id="flexQtdDuplicados">0</div>
+          <div class="import-summary-label">Duplicados</div>
+        </div>
+        <div class="import-summary-item">
+          <div class="import-summary-value" id="flexQtdArquivos">0</div>
+          <div class="import-summary-label">Prints</div>
+        </div>
+      </div>
+
+      <div class="import-section-title">Endereços encontrados</div>
+      <div class="address-list" id="flexEnderecosEncontrados"></div>
+
+      <div class="import-section-title">Itens ignorados</div>
+      <div class="address-list" id="flexEnderecosIgnorados"></div>
+    </div>
+
+    <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <button class="btn btn-secondary" id="btnCancelarFlex" type="button">Cancelar</button>
+      <button class="btn btn-success" id="btnConfirmarFlex" type="button" disabled>Confirmar importação</button>
+    </div>
+    <button class="btn btn-danger" id="btnLimparFlex" type="button" style="margin-top:10px">Limpar preview</button>
   </div>
 </div>
 
