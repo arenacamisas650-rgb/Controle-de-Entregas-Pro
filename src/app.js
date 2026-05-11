@@ -12,6 +12,10 @@ import { renderizarModoTrabalhoAtivo, aplicarTemasColoresDinamicas } from './ui/
 import { trabalhoAtivoManager } from './realtime.js';
 
 const ENABLE_AUTH = false; // MODO BYPASS PARA TESTES - ALTERAR PARA true EM PRODUÇÃO
+const OFFLINE_USER = {
+  id: 'offline-user',
+  email: 'offline@local',
+};
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const readInput = (id) => document.getElementById(id)?.value ?? '';
@@ -34,8 +38,22 @@ const setLoading = (loading, message = 'Carregando...') => {
   setText('loadingText', message);
 };
 
+const esconderAuth = () => {
+  document.body.classList.add('auth-bypass');
+  $('#authPanel')?.classList.remove('open');
+  $('#loadingOverlay')?.classList.remove('open');
+  state.loading.auth = false;
+  state.loading.data = false;
+};
+
 const updateAuthUI = () => {
   const authPanel = $('#authPanel');
+  if (!ENABLE_AUTH) {
+    esconderAuth();
+    setText('authUserEmail', 'Modo Offline');
+    updateSyncStatus();
+    return;
+  }
   if (authPanel) authPanel.classList.toggle('open', ENABLE_AUTH && !state.auth.user);
   setText('authUserEmail', state.auth.user?.email || (ENABLE_AUTH ? '' : 'Modo Offline'));
   const configWarn = $('#supabaseConfigWarn');
@@ -84,6 +102,10 @@ const hydrateConfigInputs = () => {
 };
 
 const addPendingIfNeeded = async (path, payload) => {
+  if (!ENABLE_AUTH) {
+    updateSyncStatus();
+    return;
+  }
   await queueSync(path, payload);
   if (navigator.onLine) await syncNow();
   updateSyncStatus();
@@ -357,25 +379,49 @@ const bindEvents = () => {
   $('#btnDismiss')?.addEventListener('click', () => $('#installBanner')?.classList.remove('show'));
 };
 
-const init = async () => {
+const inicializarAplicacao = async () => {
   try { await migrateFromLocalStorage(); replaceState(await loadSnapshot()); } catch { showToast('Nao foi possivel carregar dados locais.', 'error'); }
   const h = new Date(), filtro = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
   state.ui.mesFiltrado = filtro; writeInput('filtroMes', filtro); writeInput('data', todayISO()); writeInput('dataVale', todayISO()); hydrateConfigInputs();
   $$('input[type="number"]').forEach((i) => i.setAttribute('min', '0'));
   bindEvents(); iniciarMapa();
+};
+
+const renderizarTudo = () => {
+  renderAll();
+  updateAuthUI();
+};
+
+const registrarServiceWorker = () => {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+};
+
+const init = async () => {
+  if (!ENABLE_AUTH) {
+    state.auth.user = OFFLINE_USER;
+    state.auth.session = null;
+    state.auth.configured = false;
+    state.auth.loading = false;
+    esconderAuth();
+    await inicializarAplicacao();
+    renderizarTudo();
+    window.addEventListener('online', updateSyncStatus);
+    window.addEventListener('offline', updateSyncStatus);
+    registrarServiceWorker();
+    console.log('Modo offline sem autenticação ativo');
+    return;
+  }
+
+  await inicializarAplicacao();
   if (ENABLE_AUTH) {
     try {
       await auth.init(async () => { updateAuthUI(); await mergeRemoteData(); });
     } catch (error) {
       showToast(error.message || 'Falha ao iniciar autenticacao.', 'error');
     }
-  } else {
-    // MODO BYPASS: app abre direto e trabalha somente com banco local.
-    state.auth.user = null;
-    state.auth.configured = false;
   }
   renderAll(); updateAuthUI(); await mergeRemoteData(); scheduleSync(updateSyncStatus);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  registrarServiceWorker();
 };
 
 document.addEventListener('DOMContentLoaded', init);

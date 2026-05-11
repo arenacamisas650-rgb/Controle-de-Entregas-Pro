@@ -1,8 +1,33 @@
 import { state } from '../state.js';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient.js';
 
+export const authDisabled = true;
+
+const fakeUser = {
+  id: 'offline-user',
+  email: 'offline@local',
+};
+
+const fakeSuccess = () => {
+  state.auth.user = fakeUser;
+  state.auth.session = null;
+  state.auth.configured = false;
+  state.auth.loading = false;
+  return {
+    success: true,
+    user: fakeUser,
+    session: null,
+  };
+};
+
 export const auth = {
   async init(onChange) {
+    if (authDisabled) {
+      const result = fakeSuccess();
+      onChange?.('AUTH_DISABLED', null);
+      return result.session;
+    }
+
     state.auth.configured = isSupabaseConfigured();
     if (!state.auth.configured) {
       console.warn('[Auth] Supabase não configurado');
@@ -42,6 +67,8 @@ export const auth = {
   },
 
   async login(email, password) {
+    if (authDisabled) return fakeSuccess();
+
     try {
       const supabase = getSupabase();
       console.log('[Auth] Tentando login com email:', email);
@@ -61,6 +88,8 @@ export const auth = {
   },
 
   async signInWithGoogle() {
+    if (authDisabled) return fakeSuccess();
+
     try {
       const supabase = getSupabase();
       console.log('[Auth] Tentando login com Google');
@@ -83,6 +112,8 @@ export const auth = {
   },
 
   async signup(email, password, nome = '') {
+    if (authDisabled) return fakeSuccess();
+
     try {
       const supabase = getSupabase();
       console.log('[Auth] Registrando novo usuário:', email);
@@ -106,6 +137,8 @@ export const auth = {
   },
 
   async logout() {
+    if (authDisabled) return fakeSuccess();
+
     try {
       const supabase = getSupabase();
       console.log('[Auth] Fazendo logout');

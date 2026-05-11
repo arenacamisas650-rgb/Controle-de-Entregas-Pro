@@ -338,6 +338,8 @@
     .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 16px 0 10px; }
     .auth-panel, .loading-overlay { position: fixed; inset: 0; background: rgba(244,247,251,0.96); z-index: 700; display: none; align-items: center; justify-content: center; padding: 20px; }
     .auth-panel.open, .loading-overlay.open { display: flex; }
+    body.auth-bypass .auth-panel,
+    body.auth-bypass .loading-overlay { display: none !important; }
     .auth-box { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
     .auth-title { font-size: 24px; font-weight: 900; margin-bottom: 8px; }
     .auth-sub { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px; }

@@ -39,6 +39,12 @@ export const syncNow = async () => {
     console.warn('[Sync] Nenhum usuário autenticado');
     return { sent: 0 };
   }
+
+  if (state.auth.user.id === 'offline-user') {
+    console.log('[Sync] Autenticação desativada - sincronização remota ignorada');
+    state.sync.status = navigator.onLine ? 'online' : 'offline';
+    return { sent: 0 };
+  }
   
   if (!api.isConfigured()) {
     console.warn('[Sync] Supabase não está configurado');
