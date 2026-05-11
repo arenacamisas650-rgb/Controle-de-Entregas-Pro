@@ -106,7 +106,7 @@ const salvarConfiguracoes = async () => {
 };
 
 const salvarRota = async (input) => {
-  if (api.isConfigured() && !state.auth.user?.id) throw new Error('Faca login para salvar e sincronizar rotas.');
+  if (ENABLE_AUTH && api.isConfigured() && !state.auth.user?.id) throw new Error('Faca login para salvar e sincronizar rotas.');
   const rota = validateRoute({ ...input, userId: state.auth.user?.id || '', custoPorKm: state.config.custoPorKm, custoPorKmIncluiCombustivel: state.config.custoPorKmIncluiCombustivel });
   state.rotas.push(rota); state.empresas.add(rota.empresa);
   if (rota.consumoVeiculo) state.config.consumoVeiculo = rota.consumoVeiculo;
@@ -116,7 +116,7 @@ const salvarRota = async (input) => {
 };
 
 const salvarVale = async (input) => {
-  if (api.isConfigured() && !state.auth.user?.id) throw new Error('Faca login para salvar e sincronizar vales.');
+  if (ENABLE_AUTH && api.isConfigured() && !state.auth.user?.id) throw new Error('Faca login para salvar e sincronizar vales.');
   const vale = validateVale({ ...input, userId: state.auth.user?.id || '' });
   state.vales.push(vale);
   await DB.save('vales', vale); await addPendingIfNeeded('/vales', vale);
@@ -370,13 +370,12 @@ const init = async () => {
       showToast(error.message || 'Falha ao iniciar autenticacao.', 'error');
     }
   } else {
-    // MODO BYPASS: criar usuário mock
-    state.auth.user = { id: 'offline-user', email: 'offline@local.com' };
+    // MODO BYPASS: app abre direto e trabalha somente com banco local.
+    state.auth.user = null;
     state.auth.configured = false;
-    console.log('[Auth] Modo offline ativado - usuário mock criado');
   }
   renderAll(); updateAuthUI(); await mergeRemoteData(); scheduleSync(updateSyncStatus);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 };
 
 document.addEventListener('DOMContentLoaded', init);

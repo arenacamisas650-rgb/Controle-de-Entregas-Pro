@@ -1,14 +1,8 @@
 {
   "name": "entrega-pro",
   "version": "2.0.0",
-  "description": "Controle de rotas para motoristas de entrega",
   "type": "module",
-  "main": "index.html",
   "scripts": {
-    "start": "npx serve .",
-    "vercel-build": "echo \"skip build\""
-  },
-  "keywords": ["entrega", "motorista", "logistica", "pwa"],
-  "author": "",
-  "license": "MIT"
+    "start": "npx serve ."
+  }
 }

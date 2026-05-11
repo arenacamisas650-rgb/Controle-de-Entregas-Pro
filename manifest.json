@@ -1,22 +1,8 @@
 {
-  "name": "Entrega Pro - Controle de Rotas",
-  "short_name": "Entrega Pro",
-  "description": "Controle profissional de rotas para motoristas de entrega",
-  "start_url": "/",
-  "scope": "/",
+  "name": "Entrega Pro",
+  "short_name": "EntregaPro",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#0A0A0F",
-  "theme_color": "#FF4500",
-  "orientation": "portrait",
-  "icons": [],
-  "categories": ["productivity", "utilities"],
-  "lang": "pt-BR",
-  "screenshots": [],
-  "shortcuts": [
-    {
-      "name": "Nova Rota",
-      "url": "/index.html#rota",
-      "description": "Registrar nova rota"
-    }
-  ]
+  "background_color": "#ffffff",
+  "theme_color": "#0A66C2"
 }
