@@ -205,33 +205,6 @@ export const gerarSugestao = ({
 };
 
 export const calcularInsightsMotorista = (rotas) => {
-  if (!rotas.length) return { mediaDiaria: 0, sugestaoMetaDiaria: 0, melhorDia: null, piorDia: null };
-  
-  const porDia = {};
-  rotas.forEach((r) => {
-    const dia = new Date(`${r.data}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'long' });
-    if (!porDia[dia]) porDia[dia] = [];
-    porDia[dia].push(calcularLucro(r));
-  });
-
-  const mediaPorDia = Object.entries(porDia).map(([dia, valores]) => ({
-    nome: dia,
-    media: valores.reduce((a, b) => a + b, 0) / valores.length,
-  }));
-
-  const mediaDiaria = mediaPorDia.reduce((a, b) => a + b.media, 0) / mediaPorDia.length;
-  const melhorDia = mediaPorDia.reduce((a, b) => (a.media > b.media ? a : b));
-  const piorDia = mediaPorDia.reduce((a, b) => (a.media < b.media ? a : b));
-
-  return {
-    mediaDiaria,
-    sugestaoMetaDiaria: mediaDiaria * 1.1,
-    melhorDia: melhorDia.media > 0 ? melhorDia : null,
-    piorDia: piorDia.media > 0 ? piorDia : null,
-  };
-};
-
-export const calcularInsightsMotorista = (rotas) => {
   const nomes = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado'];
   const porDiaSemana = nomes.map((nome) => ({ nome, total: 0, count: 0, media: 0 }));
   const porData = new Map();

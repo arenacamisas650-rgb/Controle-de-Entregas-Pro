@@ -333,14 +333,6 @@ export const renderizarGraficoSemanal = () => {
   });
 };
 
-export const renderizarDiasSemana = () => {
-  const nomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'], totais = [0, 0, 0, 0, 0, 0, 0], conts = [0, 0, 0, 0, 0, 0, 0];
-  state.rotas.forEach((r) => { const d = new Date(`${r.data}T00:00:00`).getDay(); totais[d] += calcularLucro(r); conts[d] += 1; });
-  const medias = totais.map((t, i) => (conts[i] ? t / conts[i] : 0)), max = Math.max(...medias), c = document.getElementById('diasSemanaBar');
-  clear(c);
-  nomes.forEach((n, i) => c.append(el('div', { className: `day-item ${medias[i] === max && max > 0 ? 'best' : ''}` }, [el('div', { className: 'day-name', text: n }), el('div', { className: 'day-value', text: medias[i] > 0 ? `R$${Math.round(medias[i])}` : '-' })])));
-};
-
 export const renderizarGrafico = () => {
   const { ano, mes } = obterMesAnoFiltrado();
   setText('tituloGrafico', `Evolucao - ${new Date(ano, mes).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}`);
