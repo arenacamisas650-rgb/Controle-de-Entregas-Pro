@@ -11,6 +11,8 @@ import { renderizarHistorico } from './ui/historico.js';
 import { renderizarModoTrabalhoAtivo, aplicarTemasColoresDinamicas } from './ui/trabalho-ativo.js';
 import { trabalhoAtivoManager } from './realtime.js';
 
+const ENABLE_AUTH = false; // MODO BYPASS PARA TESTES - ALTERAR PARA true EM PRODUÇÃO
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const readInput = (id) => document.getElementById(id)?.value ?? '';
 const writeInput = (id, value) => { const input = document.getElementById(id); if (input) input.value = value ?? ''; };
@@ -34,8 +36,8 @@ const setLoading = (loading, message = 'Carregando...') => {
 
 const updateAuthUI = () => {
   const authPanel = $('#authPanel');
-  if (authPanel) authPanel.classList.toggle('open', !state.auth.user);
-  setText('authUserEmail', state.auth.user?.email || '');
+  if (authPanel) authPanel.classList.toggle('open', ENABLE_AUTH && !state.auth.user);
+  setText('authUserEmail', state.auth.user?.email || (ENABLE_AUTH ? '' : 'Modo Offline'));
   const configWarn = $('#supabaseConfigWarn');
   if (configWarn) configWarn.style.display = state.auth.configured ? 'none' : 'block';
   updateSyncStatus();
@@ -361,10 +363,17 @@ const init = async () => {
   state.ui.mesFiltrado = filtro; writeInput('filtroMes', filtro); writeInput('data', todayISO()); writeInput('dataVale', todayISO()); hydrateConfigInputs();
   $$('input[type="number"]').forEach((i) => i.setAttribute('min', '0'));
   bindEvents(); iniciarMapa();
-  try {
-    await auth.init(async () => { updateAuthUI(); await mergeRemoteData(); });
-  } catch (error) {
-    showToast(error.message || 'Falha ao iniciar autenticacao.', 'error');
+  if (ENABLE_AUTH) {
+    try {
+      await auth.init(async () => { updateAuthUI(); await mergeRemoteData(); });
+    } catch (error) {
+      showToast(error.message || 'Falha ao iniciar autenticacao.', 'error');
+    }
+  } else {
+    // MODO BYPASS: criar usuário mock
+    state.auth.user = { id: 'offline-user', email: 'offline@local.com' };
+    state.auth.configured = false;
+    console.log('[Auth] Modo offline ativado - usuário mock criado');
   }
   renderAll(); updateAuthUI(); await mergeRemoteData(); scheduleSync(updateSyncStatus);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
