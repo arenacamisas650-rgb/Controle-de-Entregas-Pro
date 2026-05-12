@@ -16,7 +16,7 @@ const BASE = __dirname;
 
 // ── Todos os arquivos JS do projeto (exceto node_modules e test) ──────────────
 const FILES = [
-  'src/app.js',
+  'src/app-v6.js',
   'src/calculations.js',
   'src/state.js',
   'src/storage.js',
@@ -24,7 +24,7 @@ const FILES = [
   'src/alerts.js',
   'src/realtime.js',
   'src/config.js',
-  'src/services/ocr.js',
+  'src/services/ocr-engine.js',
   'src/services/clipboard.js',
   'src/services/parser-endereco.js',
   'src/services/importacao-flex.js',
