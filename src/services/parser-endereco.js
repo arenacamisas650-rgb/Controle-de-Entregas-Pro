@@ -1,100 +1,121 @@
+// ─── Tipos de logradouro reconhecidos ────────────────────────────────────────
 const TIPOS_LOGRADOURO = [
-  'rua', 'r\\.', 'r', 'avenida', 'av\\.', 'av', 'alameda', 'travessa', 
-  'estrada', 'rodovia', 'praca', 'praça', 'largo', 'viela', 
-  'condominio', 'condomínio', 'residencial', 'beco', 'viaduto', 'marginal'
+  'rua', 'r\\.', 'avenida', 'av\\.', 'av', 'alameda', 'al\\.', 'travessa',
+  'estrada', 'rodovia', 'praca', 'praça', 'largo', 'viela', 'beco',
+  'viaduto', 'marginal', 'condominio', 'condomínio', 'residencial',
+  'setor', 'quadra', 'conjunto', 'loteamento', 'jardim', 'vila',
 ];
 
-const normalizarEspacos = (value) => String(value || '')
-  .normalize('NFKC')
-  .replace(/[^\S\r\n]+/g, ' ')
-  .replace(/[|•·*=_~]/g, ' ')
-  .trim();
+// Regex compilado uma vez (performance)
+const LOGRADOURO_RE = new RegExp(`\\b(${TIPOS_LOGRADOURO.join('|')})\\b`, 'i');
+const CEP_RE = /\b\d{5}-?\d{3}\b/;
+const NUMERO_RE = /(?:,\s*|\b(?:n[°º]?|num|numero)\s*[:\.]?\s*|\s+n?\s*)(\d{1,6}[a-zA-Z]?|s\/?n)\b/i;
+const COMPLEMENTO_RE = /\b(apto?|apartamento|bloco|casa|fundos|sala|torre|lote|quadra)\s*[:\-]?\s*[a-z0-9 -]{1,20}/i;
 
-const removerAcentos = (value) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '');
+// ─── Normalização ─────────────────────────────────────────────────────────────
+const normalizarEspacos = (value) =>
+  String(value || '')
+    .normalize('NFKC')
+    .replace(/[^\S\r\n]+/g, ' ')
+    .replace(/[|•·*=_~]/g, ' ')
+    .trim();
 
+const removerAcentos = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+/**
+ * Limpeza específica para saída de OCR:
+ * - Remove estados/país
+ * - Corrige CEPs com caractere OCR errado (01234A567 → 01234-567)
+ * - Normaliza espaços em excesso
+ */
 const limparTextoOCR = (texto) => {
   let limpo = texto
-    .replace(/\b(Brasil|Brazil|SP|RJ|MG|PR|SC|RS|BA)\b/gi, '') // Remove estados comuns ou pais
+    .replace(/\b(brasil|brazil|br)\b/gi, '')
+    .replace(/\b(SP|RJ|MG|PR|SC|RS|BA|GO|DF|PE|CE|AM|PA|MA|PI|AL|SE|RN|PB|ES|MT|MS|RO|TO|AC|RR|AP)\b/g, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/\s+,/g, ',')
     .trim();
-  
-  // Corrige erros comuns de OCR em CEPs (ex: 0123A-456 para 01234-456)
-  limpo = limpo.replace(/\b(\d{5})[^\d\s](\d{3})\b/g, '$1-$2');
-  
+
+  // Corrige CEPs com erro de OCR: 01234A567 → 01234-567 ou 01234 567 → 01234-567
+  limpo = limpo.replace(/\b(\d{5})[^-\d\s](\d{3})\b/g, '$1-$2');
+  limpo = limpo.replace(/\b(\d{5})\s(\d{3})\b/g, '$1-$2');
+
   return limpo;
 };
 
+// ─── Filtro de linhas inúteis ─────────────────────────────────────────────────
+const PALAVRAS_RUIDO = new Set([
+  'amazon', 'flex', 'amazon flex', 'itinerario', 'itinerary',
+  'paradas', 'parada', 'entregas', 'entrega', 'pacotes', 'pacote',
+  'navegar', 'iniciar', 'concluir', 'finalizar', 'rota', 'codigo',
+  'scanner', 'coletar', 'retirada', 'proxima', 'hoje', 'manha', 'tarde',
+  'status', 'voltar', 'ajuda', 'atualizar', 'gps', 'abrir', 'maps',
+  'iniciar navegacao', 'chegar', 'destino', 'confirmar', 'entregue',
+]);
+
 const linhaInutil = (linha) => {
-  const value = removerAcentos(linha).toLowerCase().trim();
-  if (!value || value.length < 5) return true; // Muito curto
-  if (/^\d+$/.test(value)) return true; // Apenas numeros
-  if (/^entrega\s+\d+/.test(value)) return true;
-  if (/^parada\s+\d+/.test(value)) return true;
-  if (/^stop\s+\d+/.test(value)) return true;
-  if (/^\d{1,2}:\d{2}/.test(value)) return true; // Horario
-  if (/\b\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\b/.test(value)) return true; // Intervalo horario
-  
-  const palavrasIgnoradas = [
-    'amazon flex', 'amazon', 'flex', 'itinerario', 'itinerary', 
-    'paradas', 'parada', 'entregas', 'entrega', 'pacotes', 'pacote', 
-    'navegar', 'iniciar', 'concluir', 'finalizar', 'rota', 'codigo', 
-    'scanner', 'coletar', 'retirada', 'proxima', 'hoje', 'manha', 'tarde',
-    'status', 'voltar', 'ajuda', 'atualizar', 'gps'
-  ];
-  
-  return palavrasIgnoradas.some((token) => value === token || value.includes(`${token}:`));
+  const v = removerAcentos(linha).toLowerCase().trim();
+  if (!v || v.length < 4) return true;
+  if (/^\d+$/.test(v)) return true;              // Só números
+  if (/^\d{1,2}:\d{2}/.test(v)) return true;    // Horário
+  if (/^(entrega|parada|stop)\s+\d+/i.test(v)) return true;
+  if (/^\d+\s+(pacotes?|itens?)/i.test(v)) return true;
+  if (/\b\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}\b/.test(v)) return true;
+  if (PALAVRAS_RUIDO.has(v)) return true;
+  if (PALAVRAS_RUIDO.has(v.replace(/[^a-z]/g, ''))) return true;
+  // Linhas que são só um número de parada tipo "1.", "2."
+  if (/^\d{1,3}\.$/.test(v)) return true;
+  return false;
 };
 
+// ─── Score de confiança ───────────────────────────────────────────────────────
 export const calcularScoreConfianca = (texto, temCep, temNumero, temLogradouro) => {
   let score = 0;
-  if (temLogradouro) score += 40; // Muito forte
-  if (temNumero) score += 30; // Muito forte
-  if (temCep) score += 20; // Muito forte
-  
-  if (texto.length > 15) score += 5; // Provavelmente detalhado
-  if (texto.length > 30) score += 5;
-  
-  if (!temLogradouro && !temCep && temNumero && texto.length > 10) {
-    score += 10; // Talvez seja endereco, mas nao achou a palavra "Rua"
-  }
-  
+  if (temLogradouro) score += 40;
+  if (temNumero)     score += 25;
+  if (temCep)        score += 25;
+  if (texto.length > 12) score += 5;
+  if (texto.length > 25) score += 5;
+
+  // Endereço sem logradouro explícito mas com CEP e número — provavelmente válido
+  if (!temLogradouro && temCep && temNumero) score += 10;
+  // Só número mas longo: pode ser endereço sem palavra-chave
+  if (!temLogradouro && !temCep && temNumero && texto.length > 15) score += 8;
+
   return Math.min(100, score);
 };
 
+// ─── Parse de um candidato de endereço ───────────────────────────────────────
 export const parseEndereco = (textoBruto, index = 0, origem = 'amazon-flex') => {
   const texto = limparTextoOCR(textoBruto);
   const semAcento = removerAcentos(texto).toLowerCase();
-  
-  const cepMatch = texto.match(/\b\d{5}-?\d{3}\b/);
-  const cep = cepMatch ? cepMatch[0] : '';
-  
-  // Melhoria: capturar numero apos virgula, espaco ou identificador (n, num, sn)
-  const numeroMatch = texto.match(/(?:,\s*|\b(?:n|num|nº|numero)\s*[:\.]?\s*|\s+)(\d{1,6}[a-z]?|s\/?n)\b/i);
-  const numero = numeroMatch ? numeroMatch[1] : '';
-  
-  const complementoMatch = texto.match(/\b(apto|apartamento|bloco|casa|fundos|sala|torre|lote|quadra|condominio|condomínio)\s+[a-z0-9 -]+/i);
-  const complemento = complementoMatch ? complementoMatch[0] : '';
-  
-  const logradouroRegex = new RegExp(`\\b(${TIPOS_LOGRADOURO.join('|')})\\b`, 'i');
-  const temLogradouro = logradouroRegex.test(semAcento);
-  
+
+  const cepMatch  = texto.match(CEP_RE);
+  const cep       = cepMatch ? cepMatch[0].replace(/\s/, '-') : '';
+
+  const numeroMatch = texto.match(NUMERO_RE);
+  const numero      = numeroMatch ? numeroMatch[1] : '';
+
+  const complementoMatch = texto.match(COMPLEMENTO_RE);
+  const complemento      = complementoMatch ? complementoMatch[0] : '';
+
+  const temLogradouro = LOGRADOURO_RE.test(semAcento);
+
+  // Extrai a rua como a primeira parte (até vírgula ou " - ")
   const partes = texto.split(/\s+-\s+|,\s*/).map((p) => p.trim()).filter(Boolean);
-  
-  // Tenta extrair a rua: geralmente a primeira parte
   let rua = partes[0] || texto;
-  // Se a rua for só "Rua", e tiver uma segunda parte, pode ser que separou errado
-  if (rua.length <= 4 && partes.length > 1) {
-    rua = `${partes[0]} ${partes[1]}`;
-  }
+  if (rua.length <= 4 && partes.length > 1) rua = `${partes[0]} ${partes[1]}`;
 
   const bairro = partes.length >= 3 ? partes[partes.length - 2] : '';
-  
-  const score = calcularScoreConfianca(texto, !!cep, !!numero, temLogradouro);
-  
-  const valido = score >= 50 && (temLogradouro || !!cep);
+
+  const score  = calcularScoreConfianca(texto, !!cep, !!numero, temLogradouro);
+
+  // Threshold reduzido: 40 pontos (só logradouro já é suficiente)
+  // Antes era 50 e rejeitava endereços sem CEP
+  const valido = score >= 40 && (temLogradouro || !!cep);
 
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}`,
@@ -108,126 +129,185 @@ export const parseEndereco = (textoBruto, index = 0, origem = 'amazon-flex') => 
     bairro,
     score,
     valido,
-    motivoDescarte: valido ? '' : (score < 50 ? 'Score muito baixo' : 'Sem logradouro/CEP'),
+    motivoDescarte: valido ? '' : (score < 40 ? `Score ${score} (mín. 40)` : 'Sem logradouro/CEP'),
     origem,
   };
 };
 
-// Heuristica para juntar linhas que parecem ser o mesmo endereco (multiline stitching)
+// ─── Agrupamento de linhas multi-linha ───────────────────────────────────────
+/**
+ * Amazon Flex imprime endereços em 2-4 linhas:
+ *   Linha 1: "Rua das Flores, 123"       ← logradouro + número
+ *   Linha 2: "Jardim Paulista"            ← bairro
+ *   Linha 3: "04567-890"                 ← CEP
+ *   Linha 4: "2 pacotes"                 ← RUÍDO (já filtrado antes)
+ *
+ * Estratégia:
+ * 1. Sempre inicia buffer ao encontrar logradouro OU linha com CEP standalone
+ * 2. Também inicia quando linha tem número E comprimento razoável (OCR pode cortar "Rua")
+ * 3. Finaliza ao encontrar novo logradouro, ou após acumular 4 linhas
+ */
 const agruparLinhas = (linhas) => {
-  const candidatas = [];
+  const candidatos = [];
   let buffer = [];
-  
-  const finalizarBuffer = () => {
+
+  const flush = () => {
     if (buffer.length > 0) {
-      candidatas.push(buffer.join(', '));
+      candidatos.push(buffer.join(', '));
       buffer = [];
     }
   };
 
-  linhas.forEach((linha, i) => {
-    const texto = removerAcentos(linha).toLowerCase();
-    const isLogradouro = new RegExp(`\\b(${TIPOS_LOGRADOURO.join('|')})\\b`, 'i').test(texto);
-    const hasNumero = /(?:,\s*|\b(?:n|num|nº)\s*|\s+)(\d{1,6}[a-z]?|s\/?n)\b/i.test(texto);
-    const hasCep = /\b\d{5}-?\d{3}\b/.test(texto);
-    
-    // Se linha começa com CEP ou tem padrao de complemento solto, junta com a anterior
-    const pareceComplementoSolto = /^(apto|apartamento|bloco|casa|fundos|sala|torre|lote|quadra|cep)/i.test(texto);
-    
-    if (isLogradouro && buffer.length === 0) {
+  for (const linha of linhas) {
+    const sem = removerAcentos(linha).toLowerCase();
+    const temLogradouro   = LOGRADOURO_RE.test(sem);
+    const temCep          = CEP_RE.test(linha);
+    const temNumero       = NUMERO_RE.test(linha);
+    const pareceCompl     = COMPLEMENTO_RE.test(sem);
+    // Linha que parece ser só bairro/cidade (sem número nem logradouro nem CEP)
+    const apenasTextual   = !temLogradouro && !temCep && !temNumero && linha.length > 4 && linha.length < 40;
+
+    if (temLogradouro) {
+      // Novo endereço começa — finaliza o anterior
+      flush();
       buffer.push(linha);
-      // Se ja tem logradouro e numero, pode estar completo, mas vamos ver a proxima
-      if (hasNumero || hasCep) {
-         // Opcional: pode finalizar aqui ou esperar o proximo se for bairro
-      }
+      // Se já está completo (tem número E CEP), fecha imediatamente
+      if (temNumero && temCep) flush();
+
+    } else if (temCep && buffer.length === 0) {
+      // CEP sem contexto anterior — tenta salvar como candidato isolado
+      buffer.push(linha);
+      flush();
+
     } else if (buffer.length > 0) {
-      // Se a linha tem logradouro, provavel que seja UM NOVO endereco
-      if (isLogradouro && !pareceComplementoSolto) {
-        finalizarBuffer();
+      if (pareceCompl) {
+        // Complemento pertence ao endereço atual
+        buffer.push(linha);
+      } else if (apenasTextual && buffer.length < 3) {
+        // Provável bairro/cidade — agrega
+        buffer.push(linha);
+        if (temCep) flush(); // CEP encerra o bloco
+      } else if (temCep) {
+        buffer.push(linha);
+        flush();
+      } else if (temNumero && !temLogradouro && buffer.length < 2) {
+        // Número em linha separada (OCR quebrou o endereço)
+        buffer.push(linha);
+      } else if (temLogradouro) {
+        // Já tratado acima, mas por segurança
+        flush();
         buffer.push(linha);
       } else {
-        // Junta com o buffer
-        buffer.push(linha);
-        if (hasCep) finalizarBuffer(); // Achou CEP, com certeza acabou o endereco
+        flush();
+        // Linha não faz sentido no contexto — descarta isolada
+        if (linha.length > 10) candidatos.push(linha);
       }
-    } else if (hasCep || hasNumero) {
-      // Começou com algo estranho mas tem CEP/Numero, tenta salvar
-      buffer.push(linha);
-      finalizarBuffer();
-    }
-    
-    // Nao deixa o buffer ficar gigante
-    if (buffer.length >= 3) {
-      finalizarBuffer();
-    }
-  });
-  
-  finalizarBuffer();
-  
-  // Tenta manter as linhas isoladas tambem caso o agrupamento falhe (Redundancia segura)
-  linhas.forEach(linha => {
-    if (!candidatas.includes(linha)) {
-        candidatas.push(linha);
-    }
-  });
 
-  return candidatas;
+      // Buffer muito longo — força fechamento
+      if (buffer.length >= 4) flush();
+
+    } else if (temNumero && linha.length > 10) {
+      // Linha com número mas sem logradouro reconhecido (OCR cortou "Rua")
+      // Salva como candidato simples para o parser avaliar
+      candidatos.push(linha);
+    }
+  }
+
+  flush();
+
+  // ── Redundância segura ────────────────────────────────────────────────────
+  // Adiciona linhas que ainda não estão representadas nos candidatos agrupados
+  // Isso garante que endereços em linha única não sejam perdidos
+  for (const linha of linhas) {
+    const jaPresente = candidatos.some((c) => c.includes(linha));
+    if (!jaPresente && linha.length > 8) {
+      candidatos.push(linha);
+    }
+  }
+
+  return candidatos;
 };
 
+// ─── Extração principal ───────────────────────────────────────────────────────
 export const extrairEnderecosInteligente = (textoOCR, origem = 'amazon-flex') => {
-  console.groupCollapsed(`[PARSER] Extraindo texto OCR (${textoOCR.length} chars)`);
-  
+  if (!textoOCR || !textoOCR.trim()) {
+    console.warn('[PARSER] Texto vazio recebido — nenhum endereço possível.');
+    return { enderecos: [], ignorados: [], duplicados: [] };
+  }
+
+  console.groupCollapsed(`[PARSER] Analisando ${textoOCR.length} chars de texto OCR`);
+
+  // Normaliza e filtra linhas inúteis
   const linhas = normalizarEspacos(textoOCR)
     .split(/\r?\n/)
-    .map(l => normalizarEspacos(l))
-    .filter(l => l && !linhaInutil(l));
-    
-  console.log('[PARSER] Linhas uteis:', linhas);
+    .map(normalizarEspacos)
+    .filter((l) => l && !linhaInutil(l));
+
+  console.info('[PARSER] Linhas úteis após filtro:', linhas.length, linhas);
 
   const candidatos = agruparLinhas(linhas);
-  console.log('[PARSER] Candidatos apos agrupamento:', candidatos);
+  console.info('[PARSER] Candidatos após agrupamento:', candidatos.length, candidatos);
 
-  const enderecos = [];
-  const ignorados = [];
-  const vistos = new Set();
+  const enderecos  = [];
+  const ignorados  = [];
   const duplicados = [];
-  
-  candidatos.forEach((candidato, index) => {
+  const vistos     = new Set();
+
+  for (const candidato of candidatos) {
     const parse = parseEndereco(candidato, enderecos.length, origem);
-    
+
     if (!parse.valido) {
-      if (candidato.length > 5) ignorados.push(parse);
-      return;
+      if (candidato.length > 6) {
+        ignorados.push(parse);
+      }
+      continue;
     }
-    
-    // Deduplicacao inteligente
-    const chave = removerAcentos(`${parse.rua}-${parse.numero}`).toLowerCase().replace(/[^a-z0-9]/g, '');
-    
+
+    // Deduplicação por rua+número normalizado
+    const chave = removerAcentos(`${parse.rua}-${parse.numero}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
     if (vistos.has(chave)) {
-      console.log(`[PARSER] Duplicado encontrado: ${chave}`, parse);
-      duplicados.push({...parse, motivoDescarte: 'Duplicado'});
-      
-      // Update if new one is better (higher score or more detailed)
-      const existenteIndex = enderecos.findIndex(e => removerAcentos(`${e.rua}-${e.numero}`).toLowerCase().replace(/[^a-z0-9]/g, '') === chave);
-      if (existenteIndex >= 0) {
-        const existente = enderecos[existenteIndex];
+      // Substitui se o novo tem score melhor ou mais informação
+      const idx = enderecos.findIndex(
+        (e) => removerAcentos(`${e.rua}-${e.numero}`).toLowerCase().replace(/[^a-z0-9]/g, '') === chave
+      );
+      if (idx >= 0) {
+        const existente = enderecos[idx];
         if (parse.score > existente.score || (!existente.cep && parse.cep)) {
-            console.log(`[PARSER] Substituindo existente por versao com score melhor (${existente.score} -> ${parse.score})`);
-            enderecos[existenteIndex] = { ...parse, ordem: existente.ordem };
+          enderecos[idx] = { ...parse, ordem: existente.ordem };
         }
       }
-      return;
+      duplicados.push({ ...parse, motivoDescarte: 'Duplicado' });
+      continue;
     }
-    
+
     vistos.add(chave);
     enderecos.push(parse);
-  });
-  
-  // Recalcular a ordem
-  enderecos.forEach((e, i) => e.ordem = i + 1);
+  }
 
-  console.log(`[PARSER] Sucesso: ${enderecos.length}, Ignorados: ${ignorados.length}, Duplicados: ${duplicados.length}`);
+  // Recalcula ordem sequencial
+  enderecos.forEach((e, i) => { e.ordem = i + 1; });
+
+  console.info(
+    `[PARSER] ✅ Resultado: ${enderecos.length} válidos | ${ignorados.length} ignorados | ${duplicados.length} duplicados`
+  );
+
+  if (enderecos.length > 0) {
+    console.table(
+      enderecos.map((e) => ({
+        '#': e.ordem,
+        Endereço: e.enderecoCompleto?.slice(0, 45),
+        CEP: e.cep || '—',
+        Score: e.score,
+      }))
+    );
+  } else {
+    console.warn('[PARSER] ⚠️ Nenhum endereço encontrado. Verifique a qualidade do print.');
+    console.info('[PARSER] Candidatos analisados:', candidatos);
+  }
+
   console.groupEnd();
-
   return { enderecos, ignorados, duplicados };
 };

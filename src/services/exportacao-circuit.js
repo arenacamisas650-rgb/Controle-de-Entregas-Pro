@@ -7,15 +7,13 @@ export const formatarEnderecoCircuit = (endereco) => {
 };
 
 export const gerarCsvCircuit = (enderecosRaw) => {
-  console.group('[CSV] Iniciando exportacao Circuit');
+  console.info('[CSV] Iniciando geração de arquivo para Circuit Route Planner');
   
-  // Limpeza pre-exportacao
   const enderecosValidos = enderecosRaw
     .filter(e => e && e.valido !== false && e.enderecoCompleto && e.enderecoCompleto.length > 5);
     
-  console.log(`[CSV] Filtrados ${enderecosValidos.length} enderecos validos de ${enderecosRaw.length} totais.`);
+  console.info(`[CSV] Filtrados ${enderecosValidos.length} endereços válidos para exportação.`);
 
-  // Deduplicacao final de seguranca
   const unicos = [];
   const vistos = new Set();
   
@@ -27,30 +25,27 @@ export const gerarCsvCircuit = (enderecosRaw) => {
     }
   });
 
-  console.log(`[CSV] Apos deduplicacao: ${unicos.length} enderecos unicos.`);
+  console.info(`[CSV] Total de endereços únicos: ${unicos.length}`);
 
   if (unicos.length === 0) {
-    console.groupEnd();
     throw new Error('Nenhum endereço válido para exportar.');
   }
 
+  // Formato: Address,Notes
   const cabecalho = 'Address,Notes\n';
   const linhas = unicos.map(e => {
-    const endStr = formatarEnderecoCircuit(e).replace(/"/g, '""'); // Escapar aspas para CSV
-    const notaStr = `Entrega ${e.origem || 'Amazon'}`.replace(/"/g, '""');
+    const endStr = formatarEnderecoCircuit(e).replace(/"/g, '""'); 
+    const notaStr = 'Amazon Flex'; 
     return `"${endStr}","${notaStr}"`;
   });
 
   const csvContent = cabecalho + linhas.join('\n');
-  
-  // Forca BOM para garantir UTF-8 no Excel/Circuit
   const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   
   const a = document.createElement('a');
-  const data = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `rota-circuit-${data}.csv`;
+  a.download = `rota-amazon-flex.csv`; // Nome fixo solicitado
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
@@ -58,8 +53,7 @@ export const gerarCsvCircuit = (enderecosRaw) => {
   setTimeout(() => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    console.log('[CSV] Download concluido.');
-    console.groupEnd();
+    console.info('[CSV] Exportação concluída e download iniciado.');
   }, 100);
   
   return unicos.length;

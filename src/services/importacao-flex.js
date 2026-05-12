@@ -1,5 +1,5 @@
 import { extrairEnderecosInteligente } from './parser-endereco.js';
-import { processarImagemUnica, finalizarTesseractWorker } from './ocr.js';
+import { processarImagemUnica, finalizarTesseractWorker } from './ocr-engine.js';
 import { criarRelatorioDebug } from './debug-ocr.js';
 
 const tiposPermitidos = new Set(['image/png', 'image/jpeg']);
@@ -56,21 +56,24 @@ export const processarPrintsFlex = async (files, onProgress = () => {}) => {
     for (let index = 0; index < imagens.length; index += 1) {
       const file = imagens[index];
       
-      const resultadoLocal = await processarImagemUnica(file, index + 1, total, onProgress);
-      
-      mesclarResultados(resultadoFinal, resultadoLocal);
-      
-      criarRelatorioDebug(resultadoLocal.texto, resultadoLocal.enderecos, resultadoLocal.ignorados, resultadoLocal.duplicados);
+      try {
+        const resultadoLocal = await processarImagemUnica(file, index + 1, total, onProgress);
+        mesclarResultados(resultadoFinal, resultadoLocal);
+        criarRelatorioDebug(resultadoLocal.texto, resultadoLocal.enderecos, resultadoLocal.ignorados, resultadoLocal.duplicados);
+      } catch (localErr) {
+        console.warn(`[IMPORT] Erro ao processar arquivo ${file.name}:`, localErr);
+        resultadoFinal.invalidos += 1;
+      }
 
       // Yield event loop para nao travar UI
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 80));
     }
   } catch (err) {
-    console.error('[IMPORT] Falha critica durante processamento:', err);
+    console.error('[IMPORT] Falha crítica na fila de processamento:', err);
     throw err;
   } finally {
     console.groupEnd();
-    await finalizarTesseractWorker(); // Libera memoria
+    await finalizarTesseractWorker(); 
   }
 
   onProgress({ arquivoAtual: total, total, progresso: 100, nome: 'Concluído', status: 'concluido' });

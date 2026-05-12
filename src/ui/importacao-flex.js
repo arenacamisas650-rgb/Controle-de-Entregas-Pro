@@ -191,27 +191,48 @@ export const inicializarImportacaoFlex = ({
   $('#btnProcessarFlex')?.addEventListener('click', async () => {
     const btnProcessar = $('#btnProcessarFlex');
     if (!btnProcessar || btnProcessar.disabled) return;
-    
+
     try {
       btnProcessar.disabled = true;
       const progressContainer = $('#flexProgressContainer');
       if (progressContainer) progressContainer.style.display = 'block';
 
-      resultadoAtual = await processarArquivos(selectedFiles, ({ progresso, nome, status }) => {
+      const statusTexts = {
+        'iniciando':      '🔄 Preparando...',
+        'pre-processando':'🖼 Processando imagem...',
+        'iniciando-ocr':  '🔍 Iniciando motor OCR...',
+        'ocr':            '📖 Extraindo texto...',
+        'parsing':        '🧠 Analisando endereços...',
+        'concluido':      '✅ Concluído',
+      };
+
+      resultadoAtual = await processarArquivos(selectedFiles, ({ progresso, nome, status, arquivoAtual, total }) => {
         const bar = $('#flexProgressBar');
         if (bar) bar.style.width = `${progresso}%`;
-        const dict = {
-          'pre-processando': 'Preparando Imagem',
-          'iniciando-ocr': 'Iniciando Motor OCR',
-          'ocr': 'Extraindo Texto',
-          'parsing': 'Analisando Endereços',
-          'concluido': 'Concluído'
-        };
-        setText('flexProgressText', status === 'concluido' ? 'OCR concluido' : `${dict[status] || status} [${progresso}%] - ${nome}`);
+        const prefixo = total > 1 ? `[${arquivoAtual || 1}/${total}] ` : '';
+        const textoStatus = statusTexts[status] || status;
+        setText('flexProgressText', `${prefixo}${textoStatus}${nome && status !== 'concluido' ? ` — ${nome}` : ''}`);
       });
-      
+
+      const qtdEncontrados = resultadoAtual.enderecos?.length || 0;
+
+      if (qtdEncontrados === 0) {
+        // OCR rodou mas não encontrou endereços — mostra aviso claro
+        const totalArqs = selectedFiles.length;
+        const temTexto  = resultadoAtual.textos?.some(t => t.texto?.trim().length > 20);
+        const msg = temTexto
+          ? '⚠️ OCR extraiu texto mas nenhum endereço foi reconhecido. Tente um print mais nítido ou cole manualmente.'
+          : '⚠️ OCR não conseguiu ler o texto da imagem. Use prints com boa iluminação e resolução.';
+        showToast(msg, 'error');
+        setText('flexProgressText', '⚠️ Nenhum endereço encontrado');
+      } else {
+        showToast(`✅ ${qtdEncontrados} endereço(s) encontrado(s)!`, 'success');
+        setText('flexProgressText', `✅ ${qtdEncontrados} endereço(s) extraído(s)`);
+      }
+
       renderResultado();
     } catch (error) {
+      setText('flexProgressText', `❌ Erro: ${error.message}`);
       onErro?.(error);
     } finally {
       if (btnProcessar) btnProcessar.disabled = !selectedFiles.length;
