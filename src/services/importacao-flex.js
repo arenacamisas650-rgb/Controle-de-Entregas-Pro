@@ -1,4 +1,6 @@
-import { extrairEnderecos, extrairTextoImagem } from './ocr.js';
+import { extrairEnderecosInteligente } from './parser-endereco.js';
+import { processarImagemUnica, finalizarTesseractWorker } from './ocr.js';
+import { criarRelatorioDebug } from './debug-ocr.js';
 
 const tiposPermitidos = new Set(['image/png', 'image/jpeg']);
 
@@ -11,50 +13,34 @@ export const criarResultadoImportacaoFlex = () => ({
   invalidos: 0,
 });
 
-export const chaveEnderecoFlex = (endereco) => String(
-  endereco?.rua && endereco?.numero
-    ? `${endereco.rua}-${endereco.numero}-${endereco.cep || ''}`
-    : endereco?.enderecoCompleto || ''
-).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+export const validarArquivoPrint = (file) => {
+  if (!file) throw new Error('Arquivo inválido.');
+  if (!tiposPermitidos.has(file.type)) throw new Error(`Formato não suportado: ${file.name}`);
+  if (file.size > 15 * 1024 * 1024) throw new Error(`Imagem muito grande: ${file.name}`);
+  return file;
+};
 
-export const adicionarEnderecosFlex = (resultado, enderecos = [], origem = '') => {
-  const destino = resultado || criarResultadoImportacaoFlex();
-  const existentes = new Set(destino.enderecos.map(chaveEnderecoFlex));
+// Funcao segura para misturar arrays de enderecos garantindo que nao havera duplicatas no estado global
+export const mesclarResultados = (resultadoGlobal, novoResultado) => {
+  const chavesExistentes = new Set(resultadoGlobal.enderecos.map(e => `${e.rua}-${e.numero}`.toLowerCase().replace(/[^a-z0-9]/g, '')));
 
-  enderecos.forEach((endereco) => {
-    const chave = chaveEnderecoFlex(endereco);
-    if (!chave) return;
-    if (existentes.has(chave)) {
-      destino.duplicados.push({ texto: endereco.enderecoCompleto, origem: origem || endereco.origem || 'importacao' });
-      return;
+  novoResultado.enderecos.forEach(end => {
+    const chave = `${end.rua}-${end.numero}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (chavesExistentes.has(chave)) {
+      resultadoGlobal.duplicados.push({...end, motivoDescarte: 'Duplicado no lote'});
+    } else {
+      chavesExistentes.add(chave);
+      resultadoGlobal.enderecos.push({...end, ordem: resultadoGlobal.enderecos.length + 1});
     }
-    existentes.add(chave);
-    destino.enderecos.push({
-      ...endereco,
-      origem: origem || endereco.origem || 'amazon-flex',
-      ordem: destino.enderecos.length + 1,
-    });
   });
 
-  return destino;
-};
-
-export const adicionarTextoFlex = (resultado, texto, origem = 'manual') => {
-  const destino = resultado || criarResultadoImportacaoFlex();
-  const extraido = extrairEnderecos(texto);
-  adicionarEnderecosFlex(destino, extraido.enderecos, origem);
-  extraido.ignorados.forEach((item) => destino.ignorados.push({ ...item, origem }));
-  (extraido.duplicados || []).forEach((item) => destino.duplicados.push({ ...item, origem }));
-  destino.textos.push({ origem, texto });
-  destino.invalidos = destino.ignorados.length;
-  return destino;
-};
-
-export const validarArquivoPrint = (file) => {
-  if (!file) throw new Error('Arquivo invalido.');
-  if (!tiposPermitidos.has(file.type)) throw new Error(`Formato nao suportado: ${file.name}`);
-  if (file.size > 12 * 1024 * 1024) throw new Error(`Imagem muito grande: ${file.name}`);
-  return file;
+  resultadoGlobal.ignorados.push(...novoResultado.ignorados);
+  resultadoGlobal.duplicados.push(...novoResultado.duplicados);
+  if (novoResultado.texto) {
+    resultadoGlobal.textos.push({ arquivo: novoResultado.arquivo, texto: novoResultado.texto });
+  }
+  
+  resultadoGlobal.invalidos = resultadoGlobal.ignorados.length;
 };
 
 export const processarPrintsFlex = async (files, onProgress = () => {}) => {
@@ -64,27 +50,46 @@ export const processarPrintsFlex = async (files, onProgress = () => {}) => {
 
   if (!total) throw new Error('Selecione pelo menos um print.');
 
-  for (let index = 0; index < imagens.length; index += 1) {
-    const file = imagens[index];
-    onProgress({ arquivoAtual: index + 1, total, progresso: Math.round((index / total) * 100), nome: file.name, status: 'ocr' });
-    const texto = await extrairTextoImagem(file, (ocrProgress) => {
-      const base = (index / total) * 100;
-      const slice = ocrProgress / total;
-      onProgress({ arquivoAtual: index + 1, total, progresso: Math.min(99, Math.round(base + slice)), nome: file.name, status: 'ocr' });
-    });
-    resultadoFinal.textos.push({ arquivo: file.name, texto });
-    const resultado = extrairEnderecos(texto);
-    adicionarEnderecosFlex(resultadoFinal, resultado.enderecos.map((endereco) => ({ ...endereco, arquivo: file.name })), 'amazon-flex-print');
-    resultado.ignorados.forEach((item) => resultadoFinal.ignorados.push({ ...item, arquivo: file.name, origem: 'amazon-flex-print' }));
-    (resultado.duplicados || []).forEach((item) => resultadoFinal.duplicados.push({ ...item, arquivo: file.name, origem: 'amazon-flex-print' }));
+  console.group(`[IMPORT] Iniciando fila para ${total} imagem(ns)`);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    for (let index = 0; index < imagens.length; index += 1) {
+      const file = imagens[index];
+      
+      const resultadoLocal = await processarImagemUnica(file, index + 1, total, onProgress);
+      
+      mesclarResultados(resultadoFinal, resultadoLocal);
+      
+      criarRelatorioDebug(resultadoLocal.texto, resultadoLocal.enderecos, resultadoLocal.ignorados, resultadoLocal.duplicados);
+
+      // Yield event loop para nao travar UI
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  } catch (err) {
+    console.error('[IMPORT] Falha critica durante processamento:', err);
+    throw err;
+  } finally {
+    console.groupEnd();
+    await finalizarTesseractWorker(); // Libera memoria
   }
 
-  onProgress({ arquivoAtual: total, total, progresso: 100, nome: '', status: 'concluido' });
+  onProgress({ arquivoAtual: total, total, progresso: 100, nome: 'Concluído', status: 'concluido' });
   resultadoFinal.totalArquivos = total;
-  resultadoFinal.invalidos = resultadoFinal.ignorados.length;
+  
   return resultadoFinal;
+};
+
+export const adicionarTextoFlexManual = (resultado, texto) => {
+  const destino = resultado || criarResultadoImportacaoFlex();
+  const extracao = extrairEnderecosInteligente(texto, 'amazon-flex-manual');
+  mesclarResultados(destino, {
+    enderecos: extracao.enderecos,
+    ignorados: extracao.ignorados,
+    duplicados: extracao.duplicados,
+    texto,
+    arquivo: 'Colagem Manual'
+  });
+  return destino;
 };
 
 export const montarRotaFlex = ({

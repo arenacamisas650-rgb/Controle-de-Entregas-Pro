@@ -975,10 +975,12 @@
       <button class="btn btn-secondary" id="btnSelecionarFlex" type="button">Selecionar prints</button>
       <div class="print-preview-list" id="flexPreviewList"></div>
 
-      <div class="progress-track flex-progress">
-        <div class="progress-bar" id="flexProgressBar"></div>
+      <div id="flexProgressContainer" style="display:none; margin: 12px 0;">
+        <div class="progress-track flex-progress">
+          <div class="progress-bar" id="flexProgressBar"></div>
+        </div>
+        <div class="address-sub" id="flexProgressText">Aguardando prints</div>
       </div>
-      <div class="address-sub" id="flexProgressText">Aguardando prints</div>
       <button class="btn btn-primary" id="btnProcessarFlex" type="button" disabled>Processar OCR</button>
     </div>
 
@@ -1022,7 +1024,7 @@
     </div>
 
     <div id="flexResultadoBox" style="display:none">
-      <div class="import-summary">
+      <div class="import-summary" style="grid-template-columns: repeat(5, 1fr);">
         <div class="import-summary-item">
           <div class="import-summary-value" id="flexQtdEncontrados">0</div>
           <div class="import-summary-label">Endereços</div>
@@ -1039,6 +1041,15 @@
           <div class="import-summary-value" id="flexQtdArquivos">0</div>
           <div class="import-summary-label">Prints</div>
         </div>
+        <div class="import-summary-item">
+          <div class="import-summary-value" id="flexScoreMedio" style="color:var(--yellow)">-</div>
+          <div class="import-summary-label">Score</div>
+        </div>
+      </div>
+
+      <div style="margin:12px 0; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <button class="btn btn-secondary" id="btnCopiarFlex" type="button">📋 Copiar Endereços</button>
+        <button class="btn btn-primary" id="btnExportarCsvFlex" type="button">⬇ Exportar CSV Circuit</button>
       </div>
 
       <div class="import-section-title">Endereços encontrados</div>

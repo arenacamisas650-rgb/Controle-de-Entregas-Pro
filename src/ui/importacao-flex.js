@@ -1,5 +1,7 @@
-import { adicionarEnderecosFlex, adicionarTextoFlex, criarResultadoImportacaoFlex } from '../services/importacao-flex.js';
-import { $, clear, el, setText } from './dom.js';
+import { criarResultadoImportacaoFlex, adicionarTextoFlexManual, montarRotaFlex } from '../services/importacao-flex.js';
+import { gerarCsvCircuit, copiarParaClipboard } from '../services/exportacao-circuit.js';
+import { calcularScoreMedio } from '../services/debug-ocr.js';
+import { $, clear, el, setText, showToast } from './dom.js';
 
 let selectedFiles = [];
 let resultadoAtual = criarResultadoImportacaoFlex();
@@ -29,6 +31,7 @@ const limparPreviews = () => {
 
 const renderPreviews = () => {
   const container = $('#flexPreviewList');
+  if (!container) return;
   clear(container);
   selectedFiles.forEach((file) => {
     const url = URL.createObjectURL(file);
@@ -43,9 +46,22 @@ const renderPreviews = () => {
   });
 };
 
+const editarEndereco = (index) => {
+  const endereco = resultadoAtual.enderecos[index];
+  if (!endereco) return;
+  const novoEnd = prompt('Edite o endereço completo:', endereco.enderecoCompleto);
+  if (novoEnd !== null && novoEnd.trim() !== '') {
+    resultadoAtual.enderecos[index].enderecoCompleto = novoEnd.trim();
+    // Força re-render
+    renderResultado();
+  }
+};
+
 const renderResultado = () => {
   const lista = $('#flexEnderecosEncontrados');
   const ignorados = $('#flexEnderecosIgnorados');
+  if (!lista || !ignorados) return;
+  
   clear(lista);
   clear(ignorados);
 
@@ -57,25 +73,48 @@ const renderResultado = () => {
   setText('flexQtdInvalidos', `${invalidos.length}`);
   setText('flexQtdDuplicados', `${duplicados.length}`);
   setText('flexQtdArquivos', `${resultadoAtual.totalArquivos || selectedFiles.length}`);
-  setVisible('flexResultadoBox', Boolean(enderecos.length || invalidos.length || duplicados.length));
-  $('#btnConfirmarFlex')?.toggleAttribute('disabled', !enderecos.length);
+  
+  const avgScore = calcularScoreMedio(enderecos);
+  setText('flexScoreMedio', avgScore > 0 ? `${avgScore}%` : '-');
 
-  enderecos.forEach((endereco) => {
-    lista.append(el('div', { className: 'address-item valid' }, [
-      el('div', { className: 'address-order', text: `${endereco.ordem}` }),
-      el('div', {}, [
+  setVisible('flexResultadoBox', Boolean(enderecos.length || invalidos.length || duplicados.length));
+  
+  const btnConfirmar = $('#btnConfirmarFlex');
+  if (btnConfirmar) btnConfirmar.disabled = enderecos.length === 0;
+
+  // Render endereços válidos (modo debug visual opcional com scores)
+  enderecos.forEach((endereco, index) => {
+    const isBaixaConfianca = endereco.score && endereco.score < 70;
+    const classeExtra = isBaixaConfianca ? 'warning' : 'valid';
+    
+    const divMain = el('div', { className: `address-item ${classeExtra}` }, [
+      el('div', { className: 'address-order', text: `${index + 1}` }),
+      el('div', { style: 'flex: 1' }, [
         el('div', { className: 'address-main', text: endereco.enderecoCompleto }),
-        el('div', { className: 'address-sub', text: [endereco.bairro, endereco.cep, endereco.origem, endereco.arquivo].filter(Boolean).join(' - ') }),
+        el('div', { className: 'address-sub', text: [
+          endereco.bairro, 
+          endereco.cep, 
+          endereco.arquivo, 
+          endereco.score ? `Score: ${endereco.score}` : ''
+        ].filter(Boolean).join(' - ') }),
       ]),
-    ]));
+      el('button', { className: 'btn-sm btn-secondary', text: '✏️', title: 'Revisar / Editar' })
+    ]);
+    
+    // Binding do editar
+    const editBtn = divMain.querySelector('button');
+    if (editBtn) editBtn.addEventListener('click', () => editarEndereco(index));
+    
+    lista.append(divMain);
   });
 
-  [...duplicados.map((item) => ({ ...item, motivo: 'duplicado ignorado' })), ...invalidos]
-    .slice(0, 20)
+  // Render Ignorados
+  [...duplicados.map((item) => ({ ...item, motivoDescarte: item.motivoDescarte || 'Duplicado' })), ...invalidos]
+    .slice(0, 30) // Mostra no max 30 ignorados para n travar
     .forEach((item) => {
       ignorados.append(el('div', { className: 'address-item invalid' }, [
-        el('div', { className: 'address-main', text: item.texto || item.enderecoCompleto || 'Item ignorado' }),
-        el('div', { className: 'address-sub', text: [item.motivo, item.origem, item.arquivo].filter(Boolean).join(' - ') }),
+        el('div', { className: 'address-main', text: item.textoBruto || item.enderecoCompleto || 'Item ignorado' }),
+        el('div', { className: 'address-sub', text: [item.motivoDescarte, item.arquivo].filter(Boolean).join(' - ') }),
       ]));
     });
 };
@@ -86,23 +125,17 @@ const resetarModal = () => {
   if (pararCaptura) pararCaptura();
   pararCaptura = null;
   limparPreviews();
-  clear($('#flexPreviewList'));
-  clear($('#flexEnderecosEncontrados'));
-  clear($('#flexEnderecosIgnorados'));
+  renderPreviews();
+  renderResultado();
   setText('flexProgressText', 'Aguardando prints');
   setText('flexClipboardStatus', 'Captura parada');
-  setText('flexQtdEncontrados', '0');
-  setText('flexQtdInvalidos', '0');
-  setText('flexQtdDuplicados', '0');
-  setText('flexQtdArquivos', '0');
   const bar = $('#flexProgressBar');
   if (bar) bar.style.width = '0%';
   const manual = $('#flexManualText');
   if (manual) manual.value = '';
   setVisible('flexResultadoBox', false);
-  $('#btnProcessarFlex')?.toggleAttribute('disabled', true);
-  $('#btnConfirmarFlex')?.toggleAttribute('disabled', true);
-  $('#btnPararClipboard')?.toggleAttribute('disabled', true);
+  const btnProcessar = $('#btnProcessarFlex');
+  if (btnProcessar) btnProcessar.disabled = true;
 };
 
 export const abrirImportacaoFlex = () => {
@@ -122,6 +155,8 @@ export const fecharImportacaoFlex = () => {
   limparPreviews();
 };
 
+let eventBinded = false; // Previne duplicidade de eventos se inicializar multiplas vezes
+
 export const inicializarImportacaoFlex = ({
   processarArquivos,
   detectarClipboard,
@@ -129,105 +164,116 @@ export const inicializarImportacaoFlex = ({
   confirmarImportacao,
   onErro,
 }) => {
+  if (eventBinded) return;
+  eventBinded = true;
+
   document.querySelectorAll('[data-flex-mode]').forEach((button) => {
     button.addEventListener('click', () => setModo(button.dataset.flexMode));
   });
 
-  $('#flexPrintInput')?.addEventListener('change', (event) => {
-    limparPreviews();
-    selectedFiles = [...(event.target.files || [])];
-    renderPreviews();
-    $('#btnProcessarFlex')?.toggleAttribute('disabled', !selectedFiles.length);
-    setText('flexProgressText', selectedFiles.length ? `${selectedFiles.length} print(s) selecionado(s)` : 'Aguardando prints');
-  });
+  const printInput = $('#flexPrintInput');
+  if (printInput) {
+    printInput.addEventListener('change', (event) => {
+      limparPreviews();
+      selectedFiles = [...(event.target.files || [])];
+      renderPreviews();
+      const btnProcessar = $('#btnProcessarFlex');
+      if (btnProcessar) btnProcessar.disabled = !selectedFiles.length;
+      setText('flexProgressText', selectedFiles.length ? `${selectedFiles.length} print(s) selecionado(s)` : 'Aguardando prints');
+    });
+  }
 
   $('#btnSelecionarFlex')?.addEventListener('click', () => $('#flexPrintInput')?.click());
   $('#btnFecharFlex')?.addEventListener('click', fecharImportacaoFlex);
   $('#btnCancelarFlex')?.addEventListener('click', fecharImportacaoFlex);
 
+  // Botão Processar Prints (OCR)
   $('#btnProcessarFlex')?.addEventListener('click', async () => {
+    const btnProcessar = $('#btnProcessarFlex');
+    if (!btnProcessar || btnProcessar.disabled) return;
+    
     try {
-      $('#btnProcessarFlex').disabled = true;
-      const resultado = await processarArquivos(selectedFiles, ({ progresso, nome, status }) => {
+      btnProcessar.disabled = true;
+      const progressContainer = $('#flexProgressContainer');
+      if (progressContainer) progressContainer.style.display = 'block';
+
+      resultadoAtual = await processarArquivos(selectedFiles, ({ progresso, nome, status }) => {
         const bar = $('#flexProgressBar');
         if (bar) bar.style.width = `${progresso}%`;
-        setText('flexProgressText', status === 'concluido' ? 'OCR concluido' : `Processando ${nome} - ${progresso}%`);
+        const dict = {
+          'pre-processando': 'Preparando Imagem',
+          'iniciando-ocr': 'Iniciando Motor OCR',
+          'ocr': 'Extraindo Texto',
+          'parsing': 'Analisando Endereços',
+          'concluido': 'Concluído'
+        };
+        setText('flexProgressText', status === 'concluido' ? 'OCR concluido' : `${dict[status] || status} [${progresso}%] - ${nome}`);
       });
-      adicionarEnderecosFlex(resultadoAtual, resultado.enderecos, 'amazon-flex-print');
-      resultado.ignorados.forEach((item) => resultadoAtual.ignorados.push(item));
-      resultado.duplicados.forEach((item) => resultadoAtual.duplicados.push(item));
-      resultadoAtual.totalArquivos += resultado.totalArquivos || selectedFiles.length;
+      
       renderResultado();
     } catch (error) {
       onErro?.(error);
     } finally {
-      $('#btnProcessarFlex').disabled = !selectedFiles.length;
+      if (btnProcessar) btnProcessar.disabled = !selectedFiles.length;
     }
   });
 
+  // Copiar Circuit Clipboard
+  $('#btnCopiarFlex')?.addEventListener('click', async () => {
+    try {
+      const qtd = await copiarParaClipboard(resultadoAtual.enderecos);
+      showToast(`✅ ${qtd} endereços copiados para a área de transferência!`, 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
+  // Exportar Circuit CSV
+  $('#btnExportarCsvFlex')?.addEventListener('click', () => {
+    try {
+      const qtd = gerarCsvCircuit(resultadoAtual.enderecos);
+      showToast(`✅ ${qtd} endereços exportados para o Circuit Route Planner!`, 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
+  // Clipboard Detection Nativo
   $('#btnLerClipboard')?.addEventListener('click', async () => {
     try {
       const resultado = await detectarClipboard();
-      adicionarEnderecosFlex(resultadoAtual, resultado.enderecos, 'amazon-flex-clipboard');
-      resultado.ignorados.forEach((item) => resultadoAtual.ignorados.push({ ...item, origem: 'amazon-flex-clipboard' }));
+      if (!resultado.enderecos.length) throw new Error('Nenhum endereço válido no clipboard');
+      // Mix local result 
+      resultadoAtual.enderecos.push(...resultado.enderecos);
       renderResultado();
-      setText('flexClipboardStatus', resultado.enderecos.length ? 'Endereço capturado do clipboard' : 'Nenhum endereço válido no clipboard');
+      setText('flexClipboardStatus', 'Endereço capturado!');
     } catch (error) {
       onErro?.(error);
     }
   });
 
-  $('#btnIniciarClipboard')?.addEventListener('click', () => {
-    try {
-      if (pararCaptura) pararCaptura();
-      setText('flexClipboardStatus', 'Captura ativa. Copie endereços na Amazon Flex.');
-      $('#btnPararClipboard')?.toggleAttribute('disabled', false);
-      pararCaptura = iniciarClipboard({
-        onEndereco: (endereco) => {
-          adicionarEnderecosFlex(resultadoAtual, [endereco], 'amazon-flex-clipboard');
-          renderResultado();
-          setText('flexClipboardStatus', 'Endereço detectado e adicionado.');
-        },
-        onIgnorado: (item) => {
-          resultadoAtual.ignorados.push({ ...item, origem: 'amazon-flex-clipboard' });
-          renderResultado();
-        },
-        onErro: (error) => {
-          setText('flexClipboardStatus', 'Captura parada');
-          $('#btnPararClipboard')?.toggleAttribute('disabled', true);
-          onErro?.(error);
-        },
-      });
-    } catch (error) {
-      onErro?.(error);
-    }
-  });
-
-  $('#btnPararClipboard')?.addEventListener('click', () => {
-    if (pararCaptura) pararCaptura();
-    pararCaptura = null;
-    setText('flexClipboardStatus', 'Captura parada');
-    $('#btnPararClipboard')?.toggleAttribute('disabled', true);
-  });
-
+  // Manual Import
   $('#btnImportarManualFlex')?.addEventListener('click', () => {
     const texto = readValue('flexManualText');
     if (!texto.trim()) {
       onErro?.(new Error('Cole uma lista de endereços antes de importar.'));
       return;
     }
-    adicionarTextoFlex(resultadoAtual, texto, 'amazon-flex-manual');
+    resultadoAtual = adicionarTextoFlexManual(resultadoAtual, texto);
     renderResultado();
   });
 
   $('#btnLimparFlex')?.addEventListener('click', () => {
-    resultadoAtual = criarResultadoImportacaoFlex();
-    renderResultado();
+    resetarModal();
   });
 
-  $('#btnConfirmarFlex')?.addEventListener('click', async () => {
+  // Salvar no App
+  $('#btnConfirmarFlex')?.addEventListener('click', async (e) => {
+    const btnConfirmar = e.currentTarget;
+    if (btnConfirmar.disabled) return;
+    
     try {
-      $('#btnConfirmarFlex').disabled = true;
+      btnConfirmar.disabled = true;
       await confirmarImportacao({
         enderecos: resultadoAtual.enderecos || [],
         data: readValue('flexData'),
@@ -236,10 +282,12 @@ export const inicializarImportacaoFlex = ({
         km: readValue('flexKm'),
         duracao: readValue('flexDuracao'),
       });
+      // Fechamento da janela é comandado pela prop ou aqui
       fecharImportacaoFlex();
     } catch (error) {
       onErro?.(error);
-      $('#btnConfirmarFlex').disabled = !(resultadoAtual.enderecos || []).length;
+    } finally {
+      btnConfirmar.disabled = false;
     }
   });
 };
