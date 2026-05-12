@@ -94,7 +94,7 @@ export const parseEndereco = (textoBruto, index = 0, origem = 'amazon-flex') => 
   
   const score = calcularScoreConfianca(texto, !!cep, !!numero, temLogradouro);
   
-  const valido = score >= 50 && (temLogradouro || temCep);
+  const valido = score >= 50 && (temLogradouro || !!cep);
 
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}`,

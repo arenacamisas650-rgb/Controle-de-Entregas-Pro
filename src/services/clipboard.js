@@ -1,4 +1,5 @@
-import { extrairEnderecos, validarEndereco } from './ocr.js';
+// [MODULES] clipboard.js — importa do parser-endereco (fonte correta após refatoração)
+import { extrairEnderecosInteligente, parseEndereco } from './parser-endereco.js';
 
 const intervaloPadrao = 1400;
 
@@ -14,12 +15,21 @@ export const detectarEnderecoNoClipboard = async () => {
   const texto = await lerTextoClipboard();
   if (!texto) return { texto: '', enderecos: [], ignorados: [] };
 
-  const resultado = extrairEnderecos(texto);
+  // Tenta extração inteligente multi-linha primeiro
+  const resultado = extrairEnderecosInteligente(texto, 'amazon-flex-clipboard');
   if (resultado.enderecos.length) return { texto, ...resultado };
 
-  const validacao = validarEndereco({ enderecoCompleto: texto, origem: 'amazon-flex-clipboard' });
-  if (!validacao.valido) return { texto, enderecos: [], ignorados: [{ texto, motivo: validacao.motivo }] };
-  return { texto, enderecos: [{ ...validacao.endereco, origem: 'amazon-flex-clipboard' }], ignorados: [] };
+  // Fallback: trata o texto inteiro como candidato único
+  const parse = parseEndereco(texto, 0, 'amazon-flex-clipboard');
+  if (!parse.valido) {
+    return { texto, enderecos: [], ignorados: [{ texto, motivo: parse.motivoDescarte || 'Score insuficiente' }] };
+  }
+  return {
+    texto,
+    enderecos: [{ ...parse, origem: 'amazon-flex-clipboard' }],
+    ignorados: [],
+    duplicados: [],
+  };
 };
 
 export const iniciarCapturaClipboard = ({ onEndereco, onDuplicado, onIgnorado, onErro, intervalo = intervaloPadrao } = {}) => {

@@ -1,3 +1,6 @@
+// [BOOT] app.js: ES Modules carregados pelo browser — se chegou aqui, todos os imports resolveram.
+console.log('[BOOT] app.js iniciando. Todos os módulos ES resolvidos com sucesso.');
+
 import { replaceState, snapshotState, state } from './state.js';
 import { calcularGastoCombustivel, calcularLucro, formatarMoeda } from './calculations.js';
 import { DB, loadSnapshot, migrateFromLocalStorage, persistSnapshot } from './storage.js';
@@ -13,6 +16,8 @@ import { renderizarHistorico } from './ui/historico.js';
 import { abrirImportacaoFlex, inicializarImportacaoFlex } from './ui/importacao-flex.js';
 import { renderizarModoTrabalhoAtivo, aplicarTemasColoresDinamicas } from './ui/trabalho-ativo.js';
 import { trabalhoAtivoManager } from './realtime.js';
+
+console.log('[MODULES] Todos os imports do app.js resolvidos: state, calculations, storage, validators, sync, api, auth, clipboard, importacao-flex, dom, dashboard, historico, ui/importacao-flex, trabalho-ativo, realtime.');
 
 const ENABLE_AUTH = false; // MODO BYPASS PARA TESTES - ALTERAR PARA true EM PRODUÇÃO
 const OFFLINE_USER = {
@@ -195,6 +200,7 @@ const salvarModoRapido = async () => {
 };
 
 const confirmarImportacaoFlex = async ({ enderecos, data, empresa, valor, km, duracao }) => {
+  console.log(`[OCR] Confirmando importação: ${enderecos.length} endereço(s) para salvar como rota.`);
   const rota = montarRotaFlex({
     enderecos,
     data,
@@ -341,6 +347,7 @@ const finalizarRotaGPS = () => {
 };
 
 const bindEvents = () => {
+  console.log('[EVENTS] Registrando listeners da aplicação...');
   $('[data-action="go-settings"]')?.addEventListener('click', () => setPage('settings'));
   $('[data-action="quick-route"]')?.addEventListener('click', abrirModoRapido);
   $('[data-action="import-flex"]')?.addEventListener('click', abrirImportacaoFlex);
@@ -399,6 +406,7 @@ const bindEvents = () => {
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); state.pwa.deferredPrompt = e; $('#installBanner')?.classList.add('show'); });
   $('#btnInstall')?.addEventListener('click', async () => { if (!state.pwa.deferredPrompt) return; state.pwa.deferredPrompt.prompt(); const { outcome } = await state.pwa.deferredPrompt.userChoice; state.pwa.deferredPrompt = null; $('#installBanner')?.classList.remove('show'); if (outcome === 'accepted') showToast('App instalado.', 'success'); });
   $('#btnDismiss')?.addEventListener('click', () => $('#installBanner')?.classList.remove('show'));
+  console.log('[EVENTS] Todos os listeners registrados com sucesso.');
   inicializarImportacaoFlex({
     processarArquivos: processarPrintsFlex,
     detectarClipboard: detectarEnderecoNoClipboard,
@@ -437,7 +445,7 @@ const init = async () => {
     window.addEventListener('online', updateSyncStatus);
     window.addEventListener('offline', updateSyncStatus);
     registrarServiceWorker();
-    console.log('Modo offline sem autenticação ativo');
+    console.log('[BOOT] App inicializado em modo offline. Listeners ativos. Botões prontos.');
     return;
   }
 
